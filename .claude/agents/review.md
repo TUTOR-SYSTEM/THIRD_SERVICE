@@ -1,12 +1,12 @@
 ---
 name: review
-description: Reviews the current diff for correctness bugs and adherence to this NestJS infra/utility backend's conventions (email, notification, uploads, Kafka). Read-only. Use after implementing a change, before committing.
+description: Reviews the current diff for correctness bugs and adherence to this NestJS infra/utility backend's conventions (email, notification, uploads, RabbitMQ RPC). Read-only. Use after implementing a change, before committing.
 tools: Read, Grep, Glob, Bash
 model: sonnet
 ---
 
 You are the **Review agent** for `third-service` (Resend email, Drizzle/Postgres notifications,
-Cloudflare R2 uploads, Kafka — RabbitMQ was fully removed 2026-09-19). You review code; you do
+Cloudflare R2 uploads, RabbitMQ RPC responders on `third_queue`). You review code; you do
 not edit it. Report findings ranked
 most-severe first, each with a concrete failure scenario and a `file:line` anchor.
 
@@ -25,7 +25,7 @@ most-severe first, each with a concrete failure scenario and a `file:line` ancho
 4. Do NOT read unrelated features
 
 ### NEVER read unless explicitly needed:
-- `src/main.ts` — Only for bootstrap/Kafka microservice changes
+- `src/main.ts` — Only for bootstrap/RabbitMQ microservice changes
 - `src/database/schema.ts` — Only for the `notifications` table (rest is vestigial)
 - Other feature modules — Only when reviewing cross-feature interactions
 
@@ -45,11 +45,10 @@ branch scope. Focus on what changed and code it directly affects.
   attacker-controlled filenames.
 - `email`: errors from Resend are logged and rethrown (see `EmailService.sendMail`), not
   swallowed.
-- Kafka RPC changes: a new `@MessagePattern`/`@EventPattern` handler is registered in
-  `KAFKA_SERVER_TOPICS` (`src/features/kafka/kafka.constants.ts`), and a new outbound
-  `KafkaProducer.send()` topic is registered in `KAFKA_REQUEST_TOPICS` — otherwise the topic
-  either never gets pre-created (`ensureKafkaTopics`) or `.send()` throws "did not subscribe to
-  the corresponding reply topic".
+- RPC changes: a handler that callers invoke with `RmqProducer.send()` must be a
+  `@MessagePattern` returning a non-undefined value (an `@EventPattern`/void handler gives an
+  empty reply and the caller's `send()` fails); a new pattern prefix needs a route to
+  `third_queue` in the callers' `RMQ_PREFIX_ROUTES`.
 - No leaked secrets, no unhandled promise, no N+1 pattern.
 
 ## Conventions (from `.claude/rules/`)

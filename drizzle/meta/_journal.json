@@ -36,6 +36,20 @@
       "when": 1788100427189,
       "tag": "0004_dark_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790477414013,
+      "tag": "0005_closed_callisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790487594218,
+      "tag": "0006_red_stone_men",
+      "breakpoints": true
     }
   ]
 }

@@ -6,8 +6,9 @@
 backend (`gateway`, `user`, `tutor-service`, `third-service`). It owns the platform's
 **infra/utility features**: transactional email (Resend), in-app notifications (Postgres via
 Drizzle ORM), and file uploads (Cloudflare R2 via the S3 API, with Sharp for image resizing). It
-also runs a RabbitMQ RMQ listener (`third_queue`) and subscribes to platform-wide pub/sub events
-published by the other services (e.g. it caches `user`'s login sessions into Redis).
+also runs a RabbitMQ RMQ listener (`third_queue`) whose `@MessagePattern` responders the other
+services call — including generic `redis.get`/`redis.set`/`redis.del` KV patterns (e.g. `user`
+stores login sessions and reset-password tokens through them).
 
 **This is not the education domain** (that's `tutor-service`: class/schedule/session/curriculum)
 and **not auth/user/admin/student** (that's `user`). See
@@ -44,8 +45,8 @@ and **not auth/user/admin/student** (that's `user`). See
 | Framework        | NestJS 11                                                          |
 | Language         | TypeScript 5                                                       |
 | Database         | PostgreSQL via Drizzle ORM + `postgres.js` — used by **only** the `notification` feature |
-| Cache            | Redis (`ioredis`) — used to cache session data pushed from `user` over RabbitMQ |
-| Messaging        | RabbitMQ — RMQ microservice listener (`third_queue`) with `@MessagePattern` responders on all 4 features + pub/sub (`rabbitmq` feature, topic exchange) |
+| Cache            | Redis (`ioredis`) — exposed to other services via the `redis.*` RPC patterns |
+| Messaging        | RabbitMQ — RMQ microservice listener (`third_queue`) with `@MessagePattern` responders on all 4 features (no pub/sub) |
 | Email            | Resend (`resend` package) — **not** Nodemailer despite the dependency being present |
 | File storage     | Cloudflare R2 (S3-compatible) via `@aws-sdk/client-s3`, image resizing via `sharp` |
 | Validation       | Zod v4 (via custom `ZodValidationPipe`) — only `notification` has schemas |
@@ -99,9 +100,8 @@ bun podman:down           # Podman Compose down
 src/
 ├── main.ts                       # Bootstrap: CORS, interceptors, filters, RMQ listener (third_queue), listen
 ├── app.module.ts                 # Root module
-├── app.controller.ts             # Health-check controller (+ /rmq pub/sub demo route)
-├── app.service.ts                # Health check + subscribes `health.check` and `auth.login.session`
-│                                  # (published by `user` on login) — caches the session into Redis
+├── app.controller.ts             # Health-check controller (+ `health.redis` RPC)
+├── app.service.ts                # Health check
 ├── database/
 │   ├── database.module.ts        # Global Drizzle provider (postgres.js), DRIZZLE token
 │   └── schema.ts                 # See .claude/rules/database.md — only `notifications` (+ `users`
@@ -129,7 +129,6 @@ src/
 │   │   ├── upload.provider.ts    # S3Client factory (Cloudflare R2 endpoint)
 │   │   ├── upload.interface.ts
 │   │   └── upload.module.ts
-│   ├── rabbitmq/                 # Pub/sub (amqplib) — RabbitMQProducer/Consumer, topic exchange
 │   └── redis/                    # Redis service wrapper (ioredis); also has redis.rpc.controller.ts
 │                                  # (@MessagePattern('redis.*') mirror)
 └── packages/                     # Shared utilities (import via @packages/*)
@@ -174,21 +173,15 @@ See `.claude/rules/conventions.md` (this repo) and `../.claude/rules/shared-conv
 4. `ResponseInterceptor` wraps the result: `{ statusCode, message, data, timestamp, method, path }`
 5. Errors: `ErrorInterceptor` + `HttpExceptionFilter`
 
-### RabbitMQ (pub/sub consumer + RPC responder)
+### RabbitMQ (RPC responder)
 
-`AppService.onModuleInit` (`src/app.service.ts`) subscribes two routing keys via
-`RabbitMQConsumer`: `health.check` (demo) and `auth.login.session` — the latter is published by
-`user` on a successful login and cached here into Redis
-(`auth:login-session:<userId>`, TTL from the payload). This is the working reference for
-consuming a cross-service pub/sub event.
-
-Separately, `main.ts` binds an RMQ microservice listener to `third_queue` and `gateway` reaches
-it through its `THIRD_SERVICE` `ClientProxy`. All 4 features now have a `@MessagePattern`
-responder: `email.rpc.controller.ts`, `notification.rpc.controller.ts`,
-`upload.rpc.controller.ts`, `redis.rpc.controller.ts` — each `@UseFilters(RpcExceptionFilter)`,
-delegating to the same `*Service` class its HTTP controller uses. See
-`../.claude/rules/architecture.md` and the `add-rpc-endpoint` skill (one level up) for adding a
-new pattern to an existing responder, or wiring up a feature that doesn't have one yet.
+`main.ts` binds an RMQ microservice listener to `third_queue`; `gateway` and `user` reach it
+through their `RmqProducer`, which routes `redis.*`/`email.*`/`notification.*`/`upload.*` here.
+All 4 features have a `@MessagePattern` responder (`email`/`notification`/`upload`/`redis`
+`*.rpc.controller.ts`), each delegating to the same `*Service` class its HTTP controller uses;
+`RpcExceptionFilter`/`TraceContextInterceptor` are global on the microservice. A handler called
+with `send()` must return a non-undefined value. See `../.claude/rules/architecture.md` and the
+`add-rpc-endpoint` skill (one level up) for adding a new pattern.
 
 ## Environment Variables
 
@@ -199,8 +192,7 @@ new pattern to an existing responder, or wiring up a feature that doesn't have o
 | `JWT_SECRET`                              | Used to construct the global `JwtModule` (token verification only — this repo issues no tokens) |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` / `JWT_ACCESS_EXPIRES_SECONDS` / `JWT_REFRESH_EXPIRES_SECONDS` | Read by shared `@packages` auth code, must match `user`'s |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` / `REDIS_URL`                                              | Redis connection |
-| `RABBITMQ_URL`                            | RabbitMQ connection — required at boot (both the RMQ microservice listener and pub/sub) |
-| `RABBITMQ_EXCHANGE`                       | Topic exchange for pub/sub                  |
+| `RABBITMQ_URL`                            | RabbitMQ connection — required at boot (local `amqp://admin:admin@localhost:5672`; Railway: RabbitMQ service private URL) |
 | `THIRD_QUEUE`                             | Overrides the RMQ listener queue name (default `third_queue`) |
 | `RESEND_API_KEY`                          | Required — `EmailService` throws at construction if missing |
 | `MAIL_FROM`                               | Required — sender address for Resend        |
@@ -215,7 +207,7 @@ new pattern to an existing responder, or wiring up a feature that doesn't have o
 
 - `src/main.ts` — Bootstrap, Swagger tag list (stale — see `.claude/rules/conventions.md`), RMQ
   microservice listener setup
-- `src/app.service.ts` — The reference RabbitMQ pub/sub *consumer* implementation
+- `src/features/redis/redis.rpc.controller.ts` — Reference RPC responder (generic KV patterns)
 - `src/features/notification/*` — The only full controller→service→repository→module feature
 - `src/features/uploads/upload.provider.ts` — S3Client factory for Cloudflare R2
 - `src/features/email/email.service.ts` — Resend wrapper

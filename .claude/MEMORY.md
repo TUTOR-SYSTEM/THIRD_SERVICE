@@ -5,18 +5,18 @@
 ```
 third-service/
 ├── src/
-│   ├── main.ts                    # Bootstrap: ensureKafkaTopics() pre-create, Kafka microservice
+│   ├── main.ts                    # Bootstrap: RabbitMQ microservice on `third_queue`
 │   │                              # (deferred init, its own RpcExceptionFilter/TraceContextInterceptor),
 │   │                              # CORS, HTTP interceptors/filters, listen (port 8888)
 │   ├── app.module.ts              # Root module
 │   ├── app.controller.ts          # Health-check controller only
 │   ├── app.service.ts             # Health check only — the old RabbitMQ pub/sub consumer
 │   │                              # (health.check / auth.login.session) was removed 2026-09-19,
-│   │                              # see "Kafka RPC Plumbing" below
+│   │                              # see "RMQ RPC Plumbing" below
 │   ├── database/
 │   │   ├── database.module.ts     # Global Drizzle ORM provider (postgres.js)
 │   │   └── schema.ts              # Mostly vestigial — see database.md; only `notifications`+`users` are used
-│   ├── features/                  # 5 modules — NOT a class/schedule/session domain (that's tutor-service)
+│   ├── features/                  # 4 modules — NOT a class/schedule/session domain (that's tutor-service)
 │   │   ├── email/                 # Stateless service wrapping Resend, no repository; + email.rpc.controller.ts
 │   │   ├── notification/          # Full controller→service→repository→module, Postgres-backed;
 │   │   │                          # + notification.rpc.controller.ts; NotificationModule is registered
@@ -24,10 +24,7 @@ third-service/
 │   │   │                           # + upload.rpc.controller.ts
 │   │   ├── redis/                  # Redis service wrapper (ioredis); + redis.rpc.controller.ts
 │   │   │                           # (generic redis.get/set/del — reused by `user` for session
-│   │   │                           # + reset-token storage, see "Kafka RPC Plumbing" below)
-│   │   └── kafka/                   # KafkaProducer (send/emit + trace headers, though
-│   │                                # KAFKA_REQUEST_TOPICS is empty — this repo only responds
-│   │                                # today) + kafka.constants.ts topic lists + kafka.admin.ts
+│   │   │                           # + reset-token storage, see "RMQ RPC Plumbing" below)
 │   └── packages/                  # Shared utilities
 │       ├── decorators/            # @ApiResponse, @Public, @CurrentUser, @Roles
 │       ├── entities/
@@ -66,42 +63,39 @@ Only `notification` has one, under `src/packages/entities/notification/`:
 4. `ResponseInterceptor` wraps response: `{ statusCode, message, data, timestamp, method, path }`
 5. Errors handled by `ErrorInterceptor` + `HttpExceptionFilter`
 
-## Kafka RPC Plumbing
+## RMQ RPC Plumbing
 
-Referenced elsewhere as `[[kafka-rpc-plumbing]]`. **RabbitMQ was fully removed 2026-09-19**
-(commit-adjacent to `user`'s own Kafka migration) — the RMQ microservice listener
-(`third_queue`), the hand-rolled `RabbitMQModule`/`RabbitMQProducer`/`RabbitMQConsumer` classes,
-and `AppService`'s `health.check`/`auth.login.session` pub/sub subscriptions are all gone.
-Nothing published to either routing key by the time this was removed (same dead-weight
-situation `tutor-service` was in), and this dev environment doesn't run a RabbitMQ broker at
-all — `docker-compose.yml` here still defines a `rabbitmq` service, but it's unused now (a
-Kafka broker runs separately, outside this repo's compose file, at `localhost:9092`).
+Referenced elsewhere as `[[rmq-rpc-plumbing]]`. Inter-service transport is **RabbitMQ**
+(`@nestjs/microservices` RMQ transport). History: RabbitMQ → Kafka (2026-09-19) → back to
+RabbitMQ (2026-09-27). The old hand-rolled pub/sub (`RabbitMQModule`, `health.check`/
+`auth.login.session` subscriptions) is gone and was *not* brought back — everything is RPC now.
 
-- **RPC**: All 4 features have a Kafka `@MessagePattern`/`@EventPattern` responder
-  (`email`/`notification`/`upload`/`redis` `*.rpc.controller.ts`), reached by any of the other 3
-  services' `KafkaProducer`. `RpcExceptionFilter` is applied globally to the Kafka microservice
-  in `main.ts` (not per-controller despite older comments saying so). Every topic a responder
-  hosts must be listed in `KAFKA_SERVER_TOPICS` (`src/features/kafka/kafka.constants.ts`) —
-  `ensureKafkaTopics()` (`kafka.admin.ts`), called in `main.ts` before `NestFactory.create()`,
-  pre-creates every topic in `ALL_KAFKA_TOPICS` since Kafka's broker-side auto-create is racy.
-  `KAFKA_REQUEST_TOPICS` is currently empty — this repo only responds, it doesn't call out to
-  other services yet (though `KafkaProducer.send()`/`.emit()` exist and are ready to use).
-- **The generic `redis.get`/`redis.set`/`redis.del` topics are this repo's most-reused surface**:
-  `user`'s `AuthService` already calls them for two things — reset-password token storage
-  (`reset-password:<jti>`) and, as of a recent session, a fire-and-forget login-session record
-  per successful login (`session:<loginAt ms-epoch>` → the raw refreshToken JWT, TTL = the
-  refresh token's own lifetime). This is the *replacement* for the old
-  `auth.login.session`-over-RabbitMQ flow CLAUDE.md still describes — the mechanism changed
-  (Kafka request via a generic KV topic, not a dedicated pub/sub routing key) but the practical
-  effect (`user` logins land a Redis-cached session here) is the same intent.
+- **RPC**: `main.ts` opens an RMQ microservice on the durable `third_queue` (`THIRD_QUEUE`,
+  `prefetchCount: 10`, `deferInitialization: true` so the global `RpcExceptionFilter`/
+  `TraceContextInterceptor` attach before listeners bind). All 4 features have a
+  `*.rpc.controller.ts` responder (`email`/`notification`/`upload`/`redis`), reached by the
+  other services' `RmqProducer`, which routes `redis.*`/`email.*`/`notification.*`/`upload.*`/
+  `health.redis` here. No topic registry or pre-creation — a new `@MessagePattern` just works.
+- This repo only responds — it has no outbound producer. If it ever needs to call another
+  service, copy gateway's `src/features/rabbitmq/` module (as `user` did).
+- **Trace headers** arrive as AMQP `properties.headers`; `TraceContextInterceptor` reads them
+  via `RmqContext.getMessage()` and the pattern via `getPattern()`.
+- **`send()` needs a reply**: a caller's `RmqProducer.send()` to an `@EventPattern` gets an empty
+  reply and fails. That's why `redis.set` is a `@MessagePattern` that awaits the write and
+  returns `{ ok: true }` (`redis.del` stays `@EventPattern` — only ever `emit()`ed).
+- **The generic `redis.get`/`redis.set`/`redis.del` patterns are this repo's most-reused
+  surface**: `user`'s `AuthService` calls them for reset-password token storage
+  (`reset-password:<jti>`) and a fire-and-forget login-session record per successful login
+  (`session:<userId>` → refreshToken, TTL = the refresh token's lifetime); gateway's
+  `JwtAuthGuard` reads that session via `redis.get`.
   See `../.claude/rules/architecture.md` for the RPC contract and the `add-rpc-endpoint` skill
   (one level up) for adding a new pattern.
 
 ## Key Files
 
-- `src/main.ts` — Bootstrap, Kafka microservice setup, Swagger tags (stale, see conventions.md)
-- `src/features/redis/redis.rpc.controller.ts` — The generic Kafka KV surface other services
-  reuse most (see "Kafka RPC Plumbing" above)
+- `src/main.ts` — Bootstrap, RabbitMQ microservice setup, Swagger tags (stale, see conventions.md)
+- `src/features/redis/redis.rpc.controller.ts` — The generic KV RPC surface other services
+  reuse most (see "RMQ RPC Plumbing" above)
 - `src/features/notification/*` — Reference for the full layered feature shape
 - `src/features/uploads/upload.provider.ts` — S3Client factory for Cloudflare R2
 - `src/features/email/email.service.ts` — Resend wrapper
@@ -119,10 +113,8 @@ bun compose:up / compose:down / podman:up / podman:down
 
 ## Environment Variables
 
-`KAFKA_CLIENT_ID`/`KAFKA_BROKERS`/`KAFKA_GROUP_ID` (defaults `third-service`/`localhost:9092`/
-`third-service`) replaced `RABBITMQ_URL`/`RABBITMQ_EXCHANGE`/`THIRD_QUEUE` — those RabbitMQ vars
-are no longer read anywhere in `src/` (CLAUDE.md's table still lists them; stale as of the
-2026-09-19 removal, see "Kafka RPC Plumbing" above). Otherwise see `CLAUDE.md`'s Environment
+`RABBITMQ_URL` (local `amqp://admin:admin@localhost:5672`; Railway: the RabbitMQ service's
+private URL) and `THIRD_QUEUE` (default `third_queue`). Otherwise see `CLAUDE.md`'s Environment
 Variables table for the full list (Postgres, Redis, `RESEND_API_KEY`/`MAIL_FROM`/
 `PASSWORD_RESET_URL_BASE`, `CLOUDFLARE_R2_*`, plus JWT verification vars shared with `user`).
 Several OAuth-related vars (`GOOGLE_*`, `FACEBOOK_*`, `BACKEND_URL`) are read by shared
@@ -157,7 +149,7 @@ Several OAuth-related vars (`GOOGLE_*`, `FACEBOOK_*`, `BACKEND_URL`) are read by
 
 - `dev.md` — Development agent (aware of the 3 feature shapes)
 - `review.md` — Code review agent
-- `security.md` — Security review agent (file-upload safety, Kafka payload trust)
+- `security.md` — Security review agent (file-upload safety, RPC payload trust)
 - `test.md` — Test agent (Jest only)
 
 ## Rules
@@ -166,7 +158,7 @@ Several OAuth-related vars (`GOOGLE_*`, `FACEBOOK_*`, `BACKEND_URL`) are read by
   stale Swagger tags, unused `cloudinary` dep) — points to `../.claude/rules/shared-conventions.md`
   for the cross-service baseline
 - `database.md` — **Read this before touching `schema.ts`** — most of it is vestigial
-- `nestjs-feature-pattern.md` — The 3 real feature shapes + the Kafka RPC responder pattern
+- `nestjs-feature-pattern.md` — The 3 real feature shapes + the RMQ RPC responder pattern
 
 Cross-service rules (RPC contract, shared conventions) live one level up in `api/.claude/rules/`.
 

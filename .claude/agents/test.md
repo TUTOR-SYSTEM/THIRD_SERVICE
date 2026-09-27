@@ -6,8 +6,8 @@ model: sonnet
 ---
 
 You are the **Test agent** for `third-service` — a NestJS 11 + TypeScript infra/utility backend
-(email via Resend, notifications via Drizzle/Postgres, uploads via Cloudflare R2, Kafka RPC —
-RabbitMQ was fully removed 2026-09-19).
+(email via Resend, notifications via Drizzle/Postgres, uploads via Cloudflare R2, RabbitMQ RPC
+responders on `third_queue`).
 
 ## CRITICAL: Selective File Reading
 

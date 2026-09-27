@@ -540,3 +540,35 @@ export const messages = pgTable(
     index('messages_conversation_id_created_at_idx').on(table.conversationId, table.createdAt),
   ],
 );
+
+// ── Request Logs ─────────────────────────────────────────────────────
+// Centralized log of every HTTP request (gateway) and RPC hop (user/tutor-service/
+// third-service), written fire-and-forget by each service's LoggerInterceptor /
+// TraceContextInterceptor so requests can be traced across all microservices from one table.
+export const logTypeEnum = pgEnum('log_type', ['HTTP', 'RPC']);
+
+export const requestLogs = pgTable(
+  'request_logs',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    serviceName: varchar('service_name', { length: 50 }).notNull(),
+    type: logTypeEnum('type').notNull(),
+    method: varchar('method', { length: 10 }),
+    path: text('path').notNull(),
+    statusCode: integer('status_code'),
+    durationMs: integer('duration_ms').notNull(),
+    correlationId: varchar('correlation_id', { length: 100 }).notNull(),
+    traceId: varchar('trace_id', { length: 100 }).notNull(),
+    parentTraceId: varchar('parent_trace_id', { length: 100 }),
+    userId: uuid('user_id'),
+    ip: varchar('ip', { length: 64 }),
+    requestBody: text('request_body'),
+    responseBody: text('response_body'),
+    errorMessage: text('error_message'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('request_logs_correlation_id_idx').on(table.correlationId),
+    index('request_logs_service_name_created_at_idx').on(table.serviceName, table.createdAt),
+  ],
+);

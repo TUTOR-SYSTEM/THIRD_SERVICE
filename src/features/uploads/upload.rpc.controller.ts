@@ -14,9 +14,9 @@ interface UploadRpcFile {
 
 /**
  * Message-pattern mirror of `UploadController` — reached only by the gateway's `THIRD_SERVICE`
- * `ClientProxy` over Kafka. Delegates to the same, unmodified `UploadService` the HTTP controller
+ * `ClientProxy` over RabbitMQ. Delegates to the same, unmodified `UploadService` the HTTP controller
  * uses. `Buffer`s are not JSON-serializable, so the gateway sends files as
- * `{ buffer: { type: 'Buffer', data } }` (multer/Kafka JSON) and the download handler reads the
+ * `{ buffer: { type: 'Buffer', data } }` (multer/RabbitMQ JSON) and the download handler reads the
  * S3 stream into a Buffer before returning it.
  */
 @Controller()

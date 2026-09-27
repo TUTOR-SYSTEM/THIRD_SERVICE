@@ -45,43 +45,35 @@ TS interfaces, not Zod). Use this shape for a feature that's a thin wrapper arou
 SDK client (S3-compatible storage, a payment SDK, etc.) with no request-body validation beyond
 what `@nestjs/platform-express`'s `FileInterceptor`/Multer already does.
 
-## Infra modules (`kafka`, `redis`)
+## Infra module (`redis`)
 
-Same as every other service: `@Global()` module, no repository, no controller (normally),
-exported so any feature can inject it directly.
+Same as every other service: `@Global()` module, no repository, exported so any feature can
+inject it directly.
 
 - `redis` — one `RedisService` owning the `ioredis` connection lifecycle
   (`OnModuleDestroy`), plus `RedisController` (HTTP, `GET /redis?key=`) and
   `RedisRpcController` (`@MessagePattern('redis.get'|'redis.set')` +
   `@EventPattern('redis.del')`) — both call the same unmodified `RedisService`.
-- `kafka` — `KafkaModule` registers one `ClientKafka` (`Transport.KAFKA`) and exports
-  `KafkaProducer`/`KafkaConsumer`. **RabbitMQ was fully removed 2026-09-19** (RMQ microservice
-  listener, `third_queue`, and the old `RabbitMQModule`/`RabbitMQProducer`/`RabbitMQConsumer`
-  pub/sub classes are all gone) — every `@MessagePattern`/`@EventPattern` in this service is
-  reachable over Kafka only now. See `[[kafka-rpc-plumbing]]` memory.
 
-## Hosting a Kafka RPC responder (the real, working example)
+There is no message-queue module here: this service only *responds*, via the RMQ microservice
+`main.ts` opens on `third_queue`. See `[[rmq-rpc-plumbing]]` memory.
 
-Every feature that used to have an RMQ `@MessagePattern` responder now has the same handler
-reachable over Kafka instead — no code shape changed, only the transport. See
-`RedisRpcController` (`src/features/redis/redis.rpc.controller.ts`): plain
-`@MessagePattern('redis.get')`/`@MessagePattern('redis.set')`/`@EventPattern('redis.del')`
-handlers delegating to `RedisService`, `@UseFilters(RpcExceptionFilter)` is applied globally to
-the Kafka microservice in `main.ts` (not per-controller). Every topic a `*.rpc.controller.ts`
-here hosts **must** also be listed in `KAFKA_SERVER_TOPICS`
-(`src/features/kafka/kafka.constants.ts`) — `ensureKafkaTopics()` (`main.ts`, before
-`NestFactory.create()`) pre-creates every topic in `ALL_KAFKA_TOPICS` on the broker, and
-`ServerKafka` only binds listeners for topics it knows about at `startAllMicroservices()`.
-`redis.get`/`redis.set`/`redis.del` are **generic KV topics** other services already reuse for
-their own needs (e.g. `user`'s `AuthService` stores reset-password tokens and, as of a recent
-session, a login-session record keyed by login timestamp — see `[[kafka-rpc-plumbing]]` memory)
-— don't assume a payload arriving on these topics is about this repo's own domain.
+## Hosting an RPC responder (the real, working example)
 
-If a feature here ever needs to **call out** to another service (not just respond), inject
-`KafkaProducer` (exported globally by `KafkaModule`, no import needed) and use
-`.send(topic, payload)` (request-reply, register the topic in `KAFKA_REQUEST_TOPICS` too) or
-`.emit(topic, payload)` (fire-and-forget, for an `@EventPattern` topic on the other side).
-`KAFKA_REQUEST_TOPICS` is empty today — this repo currently only responds, it doesn't call out.
+See `RedisRpcController` (`src/features/redis/redis.rpc.controller.ts`): plain
+`@MessagePattern(...)`/`@EventPattern(...)` handlers delegating to `RedisService`.
+`RpcExceptionFilter` and `TraceContextInterceptor` are applied globally to the RMQ microservice
+in `main.ts` (not per-controller). No registry to update — a new handler is live as soon as it
+exists, reachable once the caller's `RmqProducer` routes its prefix to `third_queue`.
+- Anything a caller invokes with `.send()` must be a `@MessagePattern` that returns a
+  non-undefined value (a void/`@EventPattern` handler gives an empty reply and the caller's
+  `send()` fails). Use `@EventPattern` only for `.emit()` targets.
+- `redis.get`/`redis.set`/`redis.del` are **generic KV patterns** other services already reuse
+  (e.g. `user`'s reset-password tokens and login sessions — see `[[rmq-rpc-plumbing]]`) — don't
+  assume a payload arriving on them is about this repo's own domain.
+
+If a feature here ever needs to **call out** to another service, copy gateway's
+`src/features/rabbitmq/` module (`RmqModule`/`RmqProducer`) as `user` did.
 
 ## General
 

@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis, type RedisOptions } from 'ioredis';
 
@@ -16,7 +16,7 @@ const connectionOptions = {
 >;
 
 @Injectable()
-export class RedisService implements OnModuleDestroy {
+export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
   private readonly endpointLabel: string;
   readonly client: Redis;
@@ -46,6 +46,39 @@ export class RedisService implements OnModuleDestroy {
         `Redis (${this.endpointLabel}): ${err.message} — kiểm tra Redis đang chạy và REDIS_HOST/REDIS_PORT/REDIS_URL (compose mặc định map cổng host 6380).`,
       );
     });
+
+    this.client.on('connect', () => {
+      this.logger.log(`✅ Redis connected (${this.endpointLabel})`);
+    });
+
+    this.client.on('ready', () => {
+      this.logger.log(`✅ Redis ready (${this.endpointLabel})`);
+    });
+  }
+
+  /**
+   * `lazyConnect: true` means ioredis never opens the socket until the first command runs —
+   * without this, 'connect'/'ready' never fire at boot and the app looks "connected" (no error)
+   * while actually not talking to Redis until some request happens to touch it. Triggering the
+   * connect explicitly here surfaces success/failure at startup, same as DatabaseModule's
+   * `SELECT 1` check. Not thrown on failure — Redis is fails-open elsewhere (see
+   * JwtAuthGuard's session check) and ioredis keeps retrying against the same client in the
+   * background, still logged by the 'error'/'connect'/'ready' listeners above.
+   */
+  async onModuleInit(): Promise<void> {
+    // This hybrid app (HTTP + RMQ microservice) runs Nest's module lifecycle twice for a
+    // `@Global()` provider like this one — guard on ioredis's own state so the 2nd pass is a
+    // silent no-op instead of a confusing "already connecting/connected" warning.
+    if (this.client.status !== 'wait') {
+      return;
+    }
+    try {
+      await this.client.connect();
+    } catch (error) {
+      this.logger.warn(
+        `Initial Redis connect failed (${this.endpointLabel}): ${(error as Error).message} — will keep retrying in the background.`,
+      );
+    }
   }
 
   async get(key: string): Promise<string | null> {
@@ -53,7 +86,6 @@ export class RedisService implements OnModuleDestroy {
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    this.logger.log('data can set in redis:', key, value, ttlSeconds)
     if (ttlSeconds !== undefined && ttlSeconds > 0) {
       await this.client.set(key, value, 'EX', ttlSeconds);
       return;

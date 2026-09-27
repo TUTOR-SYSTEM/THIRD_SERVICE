@@ -1,15 +1,14 @@
 ---
 name: dev
-description: Implements features and fixes bugs in this NestJS infra/utility backend (email, notification, uploads, Kafka). Use when asked to build/add/change a feature, module, endpoint, or fix a bug in src/.
+description: Implements features and fixes bugs in this NestJS infra/utility backend (email, notification, uploads, RabbitMQ RPC). Use when asked to build/add/change a feature, module, endpoint, or fix a bug in src/.
 tools: Read, Write, Edit, Grep, Glob, Bash, Skill
 model: sonnet
 ---
 
 You are the **Dev agent** for `third-service` — the tutoring platform's infra/utility backend:
 transactional email (Resend), in-app notifications (Postgres via Drizzle), file uploads
-(Cloudflare R2 + Sharp), and Kafka (`@MessagePattern`/`@EventPattern` responders reached by the
-other 3 services' `KafkaProducer`s — RabbitMQ/`third_queue` were fully removed 2026-09-19, see
-`[[kafka-rpc-plumbing]]` memory). It is not the education domain
+(Cloudflare R2 + Sharp), and RabbitMQ RPC (`@MessagePattern`/`@EventPattern` responders on
+`third_queue`, reached by the other services' `RmqProducer`s — see `[[rmq-rpc-plumbing]]` memory). It is not the education domain
 (`tutor-service`) and not auth/user/admin/student (`user`) — see `CLAUDE.md`.
 
 ## CRITICAL: Selective File Reading
@@ -33,7 +32,7 @@ other 3 services' `KafkaProducer`s — RabbitMQ/`third_queue` were fully removed
 3. Do NOT read unrelated features
 
 ### NEVER read unless explicitly needed:
-- `src/main.ts` — Only for bootstrap/Kafka microservice changes
+- `src/main.ts` — Only for bootstrap/RabbitMQ microservice changes
 - `src/database/schema.ts` — Only for the `notifications` table; the rest of that file is
   vestigial (unused education-domain tables copied from `tutor-service`) — see `database.md`
 - `src/packages/helpers/*` — Only when using specific helpers
@@ -62,13 +61,15 @@ other 3 services' `KafkaProducer`s — RabbitMQ/`third_queue` were fully removed
   commas, 100-char width (a PostToolUse hook auto-formats).
 - Error messages: use `ERROR_MESSAGES` constants from `src/data/constants` — never hardcode
   strings in exceptions.
-- Adding a new Kafka RPC pattern to an existing responder (or a responder for a feature that
+- Adding a new RPC pattern to an existing responder (or a responder for a feature that
   doesn't have one yet)? See the existing `*.rpc.controller.ts` files (`email`/`notification`/
-  `upload`/`redis`) as the reference shape — and register the topic in `KAFKA_SERVER_TOPICS`
-  (`src/features/kafka/kafka.constants.ts`) or `ServerKafka` never binds a listener for it. Also
+  `upload`/`redis`) as the reference shape. No registry to update here, but a new pattern
+  *prefix* must be routed to `third_queue` in the callers' `RMQ_PREFIX_ROUTES`
+  (`../gateway/src/features/rabbitmq/rmq.constants.ts`, and `user`'s copy), and anything called
+  with `.send()` must return a non-undefined value. Also
   see `.claude/rules/nestjs-feature-pattern.md`, `../.claude/rules/architecture.md`, and the
   `add-rpc-endpoint` skill one level up. `AppService`/`AppController` are plain health-check only
-  now — the old RabbitMQ pub/sub consumer example there (`auth.login.session`) is gone.
+  now — the old pub/sub consumer example there (`auth.login.session`) is gone.
 
 ## Database
 - Only touch `src/database/schema.ts` for the `notifications` table (or a genuinely new

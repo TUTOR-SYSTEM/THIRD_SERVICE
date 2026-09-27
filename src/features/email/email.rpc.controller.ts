@@ -3,8 +3,8 @@ import { MessagePattern, Payload } from '@nestjs/microservices';
 import { EmailService } from './email.service';
 
 /**
- * Message-pattern mirror of `EmailController` — reached by the gateway's/`user`'s Kafka
- * `KafkaProducer` (RMQ `third_queue` too, if a caller still uses that transport). Delegates to
+ * Message-pattern mirror of `EmailController` — reached by the gateway's/`user`'s
+ * `RmqProducer` over the `third_queue` RabbitMQ queue. Delegates to
  * the same, unmodified `EmailService` the HTTP controller uses; no business logic lives here.
  */
 @Controller()
