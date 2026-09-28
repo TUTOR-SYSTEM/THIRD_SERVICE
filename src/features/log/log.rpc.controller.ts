@@ -28,4 +28,9 @@ export class LogRpcController {
   trace(@Payload() payload: { correlationId: string }) {
     return this.logService.findByCorrelationId(payload.correlationId);
   }
+
+  @MessagePattern('log.stats')
+  stats() {
+    return this.logService.stats();
+  }
 }

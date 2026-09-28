@@ -54,4 +54,15 @@ export class LogController {
   async trace(@Param('correlationId') correlationId: string) {
     return this.logService.findByCorrelationId(correlationId);
   }
+
+  @Get('stats')
+  @HttpCode(StatusCodes.OK)
+  @ApiOperation({
+    summary: 'Per-endpoint stats over the last 24h (admin only)',
+    description: 'Grouped by (method, path): calls/24h, error count/24h, P95 duration.',
+  })
+  @SwaggerResponse({ status: 200, description: 'Endpoint stats fetched' })
+  async stats() {
+    return this.logService.stats();
+  }
 }

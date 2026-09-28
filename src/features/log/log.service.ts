@@ -30,4 +30,8 @@ export class LogService {
   async findByCorrelationId(correlationId: string) {
     return this.repo.findByCorrelationId(correlationId);
   }
+
+  async stats() {
+    return this.repo.statsByEndpoint();
+  }
 }

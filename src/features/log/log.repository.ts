@@ -1,9 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, ilike, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, gte, ilike, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
 import { requestLogs } from '@tutor/gateway/schema';
-import type { CreateRequestLogDto, GetRequestLogsQueryDto } from '@packages/entities/log';
+import type {
+  CreateRequestLogDto,
+  EndpointStatsDto,
+  GetRequestLogsQueryDto,
+} from '@packages/entities/log';
 
 @Injectable()
 export class LogRepository {
@@ -75,5 +79,37 @@ export class LogRepository {
       .from(requestLogs)
       .where(eq(requestLogs.correlationId, correlationId))
       .orderBy(requestLogs.createdAt);
+  }
+
+  /** One row per `(method, path)` seen at the gateway HTTP edge in the last 24h — the "calls/24h"
+   * and "P95" columns on the admin endpoint-stats table. Root HTTP hops only (same rule as the
+   * request list): RPC hops between services never count here. */
+  async statsByEndpoint(): Promise<EndpointStatsDto[]> {
+    const rows = await this.db
+      .select({
+        method: requestLogs.method,
+        path: requestLogs.path,
+        calls24h: count(),
+        errorCount: sql<string>`count(*) filter (where ${requestLogs.statusCode} >= 400)`,
+        p95Ms: sql<string>`percentile_cont(0.95) within group (order by ${requestLogs.durationMs})`,
+      })
+      .from(requestLogs)
+      .where(
+        and(
+          eq(requestLogs.serviceName, 'gateway'),
+          eq(requestLogs.type, 'HTTP'),
+          gte(requestLogs.createdAt, sql`now() - interval '24 hours'`),
+        ),
+      )
+      .groupBy(requestLogs.method, requestLogs.path)
+      .orderBy(desc(count()));
+
+    return rows.map((r) => ({
+      method: r.method ?? '—',
+      path: r.path,
+      calls24h: Number(r.calls24h),
+      errorCount24h: Number(r.errorCount),
+      p95Ms: Math.round(Number(r.p95Ms ?? 0)),
+    }));
   }
 }
