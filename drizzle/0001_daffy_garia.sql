@@ -1,1 +1,0 @@
-ALTER TABLE "users" ALTER COLUMN "subjects" SET DATA TYPE varchar(255);

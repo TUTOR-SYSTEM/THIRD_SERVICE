@@ -1,16 +1,21 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { CreateRequestLogDto, GetRequestLogsQueryDto } from '@packages/entities/log';
+import { LogGateway } from './log.gateway';
 import { LogRepository } from './log.repository';
 
 @Injectable()
 export class LogService {
   private readonly logger = new Logger(LogService.name);
-  constructor(private readonly repo: LogRepository) {}
+  constructor(
+    private readonly repo: LogRepository,
+    private readonly gateway: LogGateway,
+  ) {}
 
   /** Fire-and-forget — called from `log.create` (RPC) or in-process (this service's own hops). */
   async createInternal(dto: CreateRequestLogDto): Promise<void> {
     try {
-      await this.repo.create(dto);
+      const row = await this.repo.create(dto);
+      this.gateway.emitNewLog(row);
     } catch (err) {
       this.logger.warn(
         `Failed to persist request log: ${err instanceof Error ? err.message : String(err)}`,

@@ -20,7 +20,7 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, ilike, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '../src/database/schema';
+import * as schema from '@tutor/gateway/schema';
 import {
   users,
   classes,
@@ -28,7 +28,7 @@ import {
   sessions,
   tuitions,
   notifications,
-} from '../src/database/schema';
+} from '@tutor/gateway/schema';
 import { hashData } from '../src/packages/helpers/hashingData.helper';
 
 function resolveDatabaseUrl(): string {

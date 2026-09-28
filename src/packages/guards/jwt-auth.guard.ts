@@ -10,7 +10,7 @@ import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
 
 import type { JwtUserRole } from '@packages/helpers';
-import { users } from 'src/database/schema';
+import { users } from '@tutor/gateway/schema';
 
 /** Access-token payload shape (matches access JWTs from `signAccessToken`). */
 export type JwtGuardUser = {

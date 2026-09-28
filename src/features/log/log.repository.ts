@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, ilike, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
-import { requestLogs } from '../../database/schema';
+import { requestLogs } from '@tutor/gateway/schema';
 import type { CreateRequestLogDto, GetRequestLogsQueryDto } from '@packages/entities/log';
 
 @Injectable()

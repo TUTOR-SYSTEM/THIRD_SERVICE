@@ -11,8 +11,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { inArray, or } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '../src/database/schema';
-import { users } from '../src/database/schema';
+import * as schema from '@tutor/gateway/schema';
+import { users } from '@tutor/gateway/schema';
 import { hashData } from '../src/packages/helpers/hashingData.helper';
 
 function resolveDatabaseUrl(): string {

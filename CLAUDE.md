@@ -129,8 +129,22 @@ src/
 │   │   ├── upload.provider.ts    # S3Client factory (Cloudflare R2 endpoint)
 │   │   ├── upload.interface.ts
 │   │   └── upload.module.ts
-│   └── redis/                    # Redis service wrapper (ioredis); also has redis.rpc.controller.ts
-│                                  # (@MessagePattern('redis.*') mirror)
+│   ├── redis/                    # Redis service wrapper (ioredis); also has redis.rpc.controller.ts
+│   │                              # (@MessagePattern('redis.*') mirror)
+│   └── log/                      # Owns `request_logs` (centralized cross-service request logging —
+│                                  # see gateway's `LogController` for the admin-facing read API).
+│                                  # log.controller.ts (HTTP, admin) + log.rpc.controller.ts
+│                                  # (`log.create`/`log.query`/`log.trace`, reached by every
+│                                  # service's LoggerInterceptor/TraceContextInterceptor via
+│                                  # `@packages/context/log-sink`) → log.service.ts →
+│                                  # log.repository.ts. log.gateway.ts is this repo's FIRST
+│                                  # WebSocket gateway (`@WebSocketGateway({ namespace: '/logs' })`,
+│                                  # JWT-in-handshake auth + role ADMIN, mirrors tutor-service's
+│                                  # `ChatGateway` pattern) — emits `log:new` right after
+│                                  # `LogService.createInternal()` inserts a row, so the admin
+│                                  # "Giám sát Request" FE page updates live. `socket.io`/
+│                                  # `@nestjs/websockets` are genuinely used here now — don't
+│                                  # assume they're vestigial like other unused deps in this repo.
 └── packages/                     # Shared utilities (import via @packages/*)
     ├── decorators/                # @Public, @CurrentUser, @Roles, @ApiResponse
     ├── entities/notification/     # The only Zod schema/DTO domain in this repo
@@ -209,6 +223,8 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
   microservice listener setup
 - `src/features/redis/redis.rpc.controller.ts` — Reference RPC responder (generic KV patterns)
 - `src/features/notification/*` — The only full controller→service→repository→module feature
+- `src/features/log/log.gateway.ts` — This repo's first WebSocket gateway (`/logs`, admin-only
+  realtime feed of new `request_logs` rows)
 - `src/features/uploads/upload.provider.ts` — S3Client factory for Cloudflare R2
 - `src/features/email/email.service.ts` — Resend wrapper
 - `src/packages/guards/` — `JwtAuthGuard`, `LanguageGuard`, `TokenBucketGuard` (all three global)
