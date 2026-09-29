@@ -6,6 +6,9 @@ import postgres from 'postgres';
 import * as schema from '@tutor/gateway/schema';
 import { validateRequiredEnvs } from '@packages/helpers';
 
+// esModuleInterop wraps the schema in a null-prototype `default` namespace that drizzle's is() chokes on.
+const { default: _default, ...tables } = schema as Record<string, unknown>;
+
 export const DRIZZLE = 'DRIZZLE';
 export const DATABASE_ENVS = [
   'POSTGRES_HOST',
@@ -57,7 +60,7 @@ export const DATABASE_ENVS = [
             logger.log('this connection:', databaseUrl);
             await client`SELECT 1`;
             logger.log('✅ PostgreSQL connected.');
-            return drizzle(client, { schema });
+            return drizzle(client, { schema: tables });
           } catch (error) {
             logger.warn(
               `PostgreSQL connection attempt ${attempt}/${MAX_RETRIES} failed: ${

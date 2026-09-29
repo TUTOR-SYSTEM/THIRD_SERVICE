@@ -43,3 +43,14 @@ third-service owns or should query that data. Concretely:
 
 `drizzle/` already has 5 generated migrations reflecting this full schema — that's expected
 given the above; it doesn't mean this repo runs code against all of it.
+
+## Schema import gotcha (2026-09-29)
+
+`src/database/database.module.ts` imports the shared schema with `import * as schema from
+'@tutor/gateway/schema'`. Because of `esModuleInterop`, that namespace gets an extra `default`
+key holding a null-prototype ESM namespace, and drizzle's `is()` crashes on it
+(`Cannot read properties of null (reading 'constructor')`, logged misleadingly as "PostgreSQL
+connect failed"). The module therefore strips `default` (`const { default: _default, ...tables }
+= schema`) and passes `{ schema: tables }` to `drizzle()`. Keep that when touching the provider
+(same fix lives in `user` and `tutor-service`). `request_logs` also gained `ip` and
+`error_message` columns in gateway's schema — apply with `db:push` from gateway.

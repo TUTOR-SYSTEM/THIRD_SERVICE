@@ -131,6 +131,16 @@ src/
 │   │   └── upload.module.ts
 │   ├── redis/                    # Redis service wrapper (ioredis); also has redis.rpc.controller.ts
 │   │                              # (@MessagePattern('redis.*') mirror)
+│   ├── test-scenario/            # Admin-managed test cases per gateway endpoint + the engine that
+│   │                              # runs them: `testscenario.create|list|update|delete|stats|run`
+│   │                              # (`test-scenario.rpc.controller.ts` only — no HTTP controller;
+│   │                              # gateway's thin `/test-scenarios` proxy reaches it). `run` fires a
+│   │                              # REAL request at `GATEWAY_BASE_URL` with a fresh `x-correlation-id`
+│   │                              # (so it lands in `request_logs` like organic traffic) and records
+│   │                              # a `test_runs` row (pass ⇔ actualStatus === expectedStatus).
+│   │                              # `wait: false` (gateway `?async=true`) returns `{ correlationId }`
+│   │                              # at once and records the run in the background. Tables
+│   │                              # `test_scenarios`/`test_runs` live in gateway's `schema.ts`.
 │   └── log/                      # Owns `request_logs` (centralized cross-service request logging —
 │                                  # see gateway's `LogController` for the admin-facing read API).
 │                                  # log.controller.ts (HTTP, admin) + log.rpc.controller.ts
@@ -158,9 +168,10 @@ src/
     └── pipes/                      # ZodValidationPipe
 
 drizzle/                          # Generated SQL migrations (5 so far) — see database.md
+scripts/seed-test-scenarios.ts    # Idempotent seed of `test_scenarios` (key endpoints, 3-6 cases each)
 test/
 ├── jest-e2e.json
-└── app.e2e-spec.ts
+└── test-scenario.e2e-spec.ts     # `testscenario.run` against a local fake-gateway HTTP server
 ```
 
 ## Code Conventions
@@ -208,6 +219,7 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` / `REDIS_URL`                                              | Redis connection |
 | `RABBITMQ_URL`                            | RabbitMQ connection — required at boot (local `amqp://admin:admin@localhost:5672`; Railway: RabbitMQ service private URL) |
 | `THIRD_QUEUE`                             | Overrides the RMQ listener queue name (default `third_queue`) |
+| `GATEWAY_BASE_URL`                        | Where `testscenario.run` fires its real requests (default `http://localhost:8888`) |
 | `RESEND_API_KEY`                          | Required — `EmailService` throws at construction if missing |
 | `MAIL_FROM`                               | Required — sender address for Resend        |
 | `PASSWORD_RESET_URL_BASE`                 | Base URL used in the forgot-password email link (default `http://localhost:3000`) |

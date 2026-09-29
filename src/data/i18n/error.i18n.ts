@@ -187,6 +187,9 @@ export const ERROR_TRANSLATIONS = {
   CLASS_ID_NOT_VALID: { vi: 'classId không hợp lệ', en: 'classId is not valid' },
   STUDENT_ID_NOT_VALID: { vi: 'studentId không hợp lệ', en: 'studentId is not valid' },
 
+  // Test scenario
+  TEST_SCENARIO_NOT_FOUND: { vi: 'Không tìm thấy kịch bản test', en: 'Test scenario not found' },
+
   // Tuition
   TUITION_RECORD_NOT_FOUND: { vi: 'Không tìm thấy hồ sơ học phí', en: 'Tuition record not found' },
 
