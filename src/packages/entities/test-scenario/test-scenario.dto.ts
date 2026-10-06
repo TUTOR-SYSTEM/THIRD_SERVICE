@@ -16,3 +16,11 @@ export type ScenarioStatsDto = {
   casesPassed: number;
   casesTotal: number;
 };
+
+/** One hop of a scenario's lastRun trace (`request_logs` row), in `createdAt` order. */
+export type ScenarioFlowHopDto = {
+  serviceName: string;
+  type: 'HTTP' | 'RPC';
+  statusCode: number | null;
+  durationMs: number;
+};

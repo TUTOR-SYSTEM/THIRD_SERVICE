@@ -16,6 +16,9 @@ export const createRequestLogSchema = z.object({
   ip: z.string().max(64).optional(),
   requestBody: z.string().optional(),
   responseBody: z.string().optional(),
+  requestHeaders: z.string().optional(),
+  responseHeaders: z.string().optional(),
+  host: z.string().max(100).optional(),
   errorMessage: z.string().optional(),
 });
 

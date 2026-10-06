@@ -33,6 +33,9 @@ export class LogRepository {
         ip: data.ip,
         requestBody: data.requestBody,
         responseBody: data.responseBody,
+        requestHeaders: data.requestHeaders,
+        responseHeaders: data.responseHeaders,
+        host: data.host,
         errorMessage: data.errorMessage,
       })
       .returning();

@@ -11,6 +11,14 @@ import {
 import { emitRequestLog } from '@packages/context/log-sink';
 
 const SERVICE_NAME = 'third-service';
+
+/** Service address for the `host` column: `SERVICE_HOST`, else `${SERVICE_NAME}:${PORT}`. */
+export function resolveServiceHost(): string {
+  const configured = process.env.SERVICE_HOST?.trim();
+  if (configured) return configured.slice(0, 100);
+  return `${SERVICE_NAME}:${process.env.PORT?.trim() || '8888'}`.slice(0, 100);
+}
+
 const MAX_LOG_LENGTH = 1000;
 const SENSITIVE_KEYS = [
   'password',
@@ -164,6 +172,7 @@ export class TraceContextInterceptor implements NestInterceptor {
                   traceId,
                   parentTraceId,
                   requestBody,
+                  host: resolveServiceHost(),
                   responseBody: previewError(err),
                   errorMessage: (err as Error)?.message ?? String(err),
                 });
@@ -182,6 +191,7 @@ export class TraceContextInterceptor implements NestInterceptor {
                   traceId,
                   parentTraceId,
                   requestBody,
+                  host: resolveServiceHost(),
                   responseBody: previewResponse(responseData),
                 });
               }
