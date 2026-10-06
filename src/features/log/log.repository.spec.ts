@@ -64,3 +64,69 @@ describe('LogRepository.statsByEndpoint', () => {
     ]);
   });
 });
+
+describe('LogRepository.create', () => {
+  it('persists the nullable header/host columns and returns the inserted row', async () => {
+    const captured: { values?: Record<string, unknown> } = {};
+    const row = { id: 'l1' };
+    const db = {
+      insert: jest.fn(() => ({
+        values: (v: Record<string, unknown>) => {
+          captured.values = v;
+          return { returning: () => Promise.resolve([row]) };
+        },
+      })),
+    };
+
+    const result = await new LogRepository(db as never).create({
+      serviceName: 'gateway',
+      type: 'HTTP',
+      path: '/classes',
+      durationMs: 5,
+      correlationId: 'c1',
+      traceId: 't1',
+      requestHeaders: '{"content-type":"application/json"}',
+      responseHeaders: '{"server":"nginx"}',
+      host: 'api-gateway:8080',
+    });
+
+    expect(result).toBe(row);
+    expect(captured.values).toMatchObject({
+      requestHeaders: '{"content-type":"application/json"}',
+      responseHeaders: '{"server":"nginx"}',
+      host: 'api-gateway:8080',
+    });
+  });
+
+  it('leaves them undefined (NULL) when the hop did not capture any', async () => {
+    const captured: { values?: Record<string, unknown> } = {};
+    const db = {
+      insert: () => ({
+        values: (v: Record<string, unknown>) => {
+          captured.values = v;
+          return { returning: () => Promise.resolve([{}]) };
+        },
+      }),
+    };
+    await new LogRepository(db as never).create({
+      serviceName: 'user',
+      type: 'RPC',
+      path: 'user.get',
+      durationMs: 1,
+      correlationId: 'c',
+      traceId: 't',
+    });
+    expect(captured.values?.requestHeaders).toBeUndefined();
+    expect(captured.values?.host).toBeUndefined();
+  });
+});
+
+describe('LogRepository.findByCorrelationId', () => {
+  it('selects full rows (incl. new columns) for the correlation id ordered by createdAt', async () => {
+    const rows = [{ id: '1', host: 'gateway:8888', requestHeaders: '{}', responseHeaders: null }];
+    const { db, calls } = fakeSelectDb(rows);
+    await expect(new LogRepository(db as never).findByCorrelationId('c1')).resolves.toEqual(rows);
+    expect(render(calls.where[0]).params).toEqual(['c1']);
+    expect(calls.select).toEqual([]);
+  });
+});

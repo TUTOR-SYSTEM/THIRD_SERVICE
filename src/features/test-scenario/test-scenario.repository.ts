@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
-import { testRuns, testScenarios } from '@tutor/gateway/schema';
+import { requestLogs, testRuns, testScenarios } from '@tutor/gateway/schema';
 import type {
   CreateTestScenarioDto,
   GetTestScenariosQueryDto,
+  ScenarioFlowHopDto,
   ScenarioStatsDto,
   UpdateTestScenarioDto,
 } from '@packages/entities/test-scenario';
@@ -69,10 +70,42 @@ export class TestScenarioRepository {
       .where(conditions.length ? and(...conditions) : undefined)
       .orderBy(asc(testScenarios.path), asc(testScenarios.method), asc(testScenarios.createdAt));
 
+    // One query for every lastRun's hops (no N+1), grouped by correlationId in memory.
+    const correlationIds = [
+      ...new Set(rows.flatMap((r) => (r.runId && r.correlationId ? [r.correlationId] : []))),
+    ];
+    const flowByCorrelationId = await this.findFlows(correlationIds);
+
     return rows.map(({ scenario, runId, ...run }) => ({
       ...scenario,
       lastRun: runId ? run : null,
+      flow: (runId && run.correlationId ? flowByCorrelationId.get(run.correlationId) : null) ?? [],
     }));
+  }
+
+  /** Hops (HTTP/RPC rows in `request_logs`) per correlationId, ordered by `createdAt`. */
+  private async findFlows(correlationIds: string[]): Promise<Map<string, ScenarioFlowHopDto[]>> {
+    const flows = new Map<string, ScenarioFlowHopDto[]>();
+    if (correlationIds.length === 0) return flows;
+
+    const hops = await this.db
+      .select({
+        correlationId: requestLogs.correlationId,
+        serviceName: requestLogs.serviceName,
+        type: requestLogs.type,
+        statusCode: requestLogs.statusCode,
+        durationMs: requestLogs.durationMs,
+      })
+      .from(requestLogs)
+      .where(inArray(requestLogs.correlationId, correlationIds))
+      .orderBy(asc(requestLogs.createdAt));
+
+    for (const { correlationId, ...hop } of hops) {
+      const list = flows.get(correlationId) ?? [];
+      list.push({ ...hop, statusCode: hop.statusCode ?? null });
+      flows.set(correlationId, list);
+    }
+    return flows;
   }
 
   async findById(id: string) {
