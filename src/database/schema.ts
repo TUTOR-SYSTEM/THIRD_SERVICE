@@ -467,6 +467,10 @@ export const requestLogs = pgTable(
     ip: varchar('ip', { length: 64 }),
     requestBody: text('request_body'),
     responseBody: text('response_body'),
+    // JSON strings of an allowlisted header subset (never authorization/cookie) + service address.
+    requestHeaders: text('request_headers'),
+    responseHeaders: text('response_headers'),
+    host: varchar('host', { length: 100 }),
     errorMessage: text('error_message'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
