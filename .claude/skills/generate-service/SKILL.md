@@ -39,8 +39,9 @@ export class FooService {
   repository builds the where-clause, not the service.
 - **findById(id)**: `this.repo.findById(id)`, throw `NotFoundException(ERROR_MESSAGES.X_NOT_FOUND)`
   if null.
-- **delete(id)**: check existence first (reuse `findById`'s not-found throw), then
-  `this.repo.delete(id)`, return `{ id }`.
+- **delete(id)** / state transitions (`markAsRead`): ONE round-trip — call `this.repo.delete(id)`
+  / `this.repo.markAsRead(id)` directly (they return `false`/`null` when no row matched) and throw
+  `NotFoundException` on that, instead of `findById` first. Delete returns `{ id }`.
 - Optional: an **internal fire-and-forget variant** (see `createInternal`) for a future
   same-process caller that shouldn't hit the validation/exception path — swallow and log errors
   instead of throwing. Only add this if something will actually call it; don't add it

@@ -36,14 +36,12 @@ export class UploadRpcController {
   @MessagePattern('upload.download')
   async download(@Payload() payload: { key: string }) {
     const { stream, contentType, contentLength } = await this.uploadService.download(payload.key);
-    const chunks: Uint8Array[] = [];
+    const chunks: Buffer[] = [];
     for await (const chunk of stream) {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
     }
     return {
-      content: Buffer.concat(
-        chunks.map((chunk) => Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)),
-      ),
+      content: Buffer.concat(chunks),
       contentType,
       contentLength,
       filename: payload.key.split('/').pop() ?? 'download',

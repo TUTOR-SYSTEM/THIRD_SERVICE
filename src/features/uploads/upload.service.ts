@@ -54,9 +54,12 @@ export class UploadService implements OnModuleInit {
 
   async upload(file: MulterFile, folder = 'uploads'): Promise<UploadResponse> {
     if (!this.s3) throw new Error('Cloudflare R2 not configured');
-    const ext = file.originalname.split('.').pop() ?? 'bin';
-    const key = `${folder}/${uuidv4()}.${ext}`;
     const isImage = file.mimetype.startsWith('image/');
+    const dot = file.originalname.lastIndexOf('.');
+    const originalExt = dot >= 0 ? file.originalname.slice(dot + 1) : '';
+    // Images are always re-encoded to JPEG below, so key/mimetype must say so.
+    const ext = isImage ? 'jpg' : originalExt || 'bin';
+    const key = `${folder}/${uuidv4()}.${ext}`;
 
     let processedBuffer = file.buffer;
 
@@ -81,7 +84,7 @@ export class UploadService implements OnModuleInit {
       url: this.getPublicUrl(key),
       key,
       size: processedBuffer.length,
-      mimetype: file.mimetype,
+      mimetype: isImage ? 'image/jpeg' : file.mimetype,
     };
   }
 

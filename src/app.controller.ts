@@ -29,22 +29,14 @@ export class AppController {
     this.logger.log('[HEALTH] Checking Redis connection and cache data');
     try {
       const shouldFetchData = payload?.fetchData ?? false;
+      const client = this.redisService.client;
+      const [pong, info, dbsize] = await Promise.all([
+        client.ping(),
+        client.info('memory'),
+        client.dbsize(),
+      ]);
 
-      // Test Redis connection
-      const pong = await this.redisService.client.ping();
-
-      // Get Redis info (memory, keys count, etc.)
-      const info = await this.redisService.client.info('memory');
-      const dbsize = await this.redisService.client.dbsize();
-
-      // Get all keys for sample
-      let sampleKeys: string[] = [];
-      if (shouldFetchData) {
-        const allKeys = await this.redisService.client.keys('*');
-        sampleKeys = allKeys.slice(0, 10); // Get first 10 keys
-      }
-
-      const stats = {
+      const stats: Record<string, unknown> = {
         status: 'healthy',
         cache: 'Redis',
         connection: 'connected',
@@ -57,18 +49,14 @@ export class AppController {
         },
       };
 
-      if (shouldFetchData && sampleKeys.length > 0) {
-        // Get values for sample keys
-        const keyValues: Record<string, unknown> = {};
-        for (const key of sampleKeys) {
-          try {
-            const value = await this.redisService.client.get(key);
-            keyValues[key] = value;
-          } catch {
-            keyValues[key] = null;
-          }
+      if (shouldFetchData) {
+        // SCAN (not KEYS) so a large keyspace never blocks Redis; first 10 keys only.
+        const [, sampleKeys] = await client.scan(0, 'COUNT', 100);
+        const keys = sampleKeys.slice(0, 10);
+        if (keys.length > 0) {
+          const values = await client.mget(keys);
+          stats['sampleKeys'] = Object.fromEntries(keys.map((k, i) => [k, values[i] ?? null]));
         }
-        stats['sampleKeys'] = keyValues;
       }
 
       this.logger.log('[HEALTH] Redis connection OK, cache data retrieved');

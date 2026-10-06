@@ -52,16 +52,17 @@ export class NotificationRepository {
 
     const where = and(...conditions);
 
-    const [totalRow] = await this.db.select({ total: count() }).from(notifications).where(where);
+    const [[totalRow], rows] = await Promise.all([
+      this.db.select({ total: count() }).from(notifications).where(where),
+      this.db
+        .select()
+        .from(notifications)
+        .where(where)
+        .orderBy(desc(notifications.createdAt))
+        .limit(limit)
+        .offset(offset),
+    ]);
     const total = Number(totalRow?.total ?? 0);
-
-    const rows = await this.db
-      .select()
-      .from(notifications)
-      .where(where)
-      .orderBy(desc(notifications.createdAt))
-      .limit(limit)
-      .offset(offset);
 
     return {
       data: rows.map((r) => ({
