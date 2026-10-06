@@ -51,16 +51,17 @@ export class LogRepository {
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
-    const [totalRow] = await this.db.select({ total: count() }).from(requestLogs).where(where);
+    const [[totalRow], rows] = await Promise.all([
+      this.db.select({ total: count() }).from(requestLogs).where(where),
+      this.db
+        .select()
+        .from(requestLogs)
+        .where(where)
+        .orderBy(desc(requestLogs.createdAt))
+        .limit(limit)
+        .offset(offset),
+    ]);
     const total = Number(totalRow?.total ?? 0);
-
-    const rows = await this.db
-      .select()
-      .from(requestLogs)
-      .where(where)
-      .orderBy(desc(requestLogs.createdAt))
-      .limit(limit)
-      .offset(offset);
 
     return {
       data: rows,

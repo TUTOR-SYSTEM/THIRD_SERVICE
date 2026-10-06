@@ -26,6 +26,9 @@ or different in third-service.
   by a `@ApiTags(...)` decorator in this repo are `Notifications`, `Upload`, `Health`, `Redis`
   (and `Emails`, implicitly, if added). Trim stale tags when you're already touching `main.ts`
   for something else — not worth a standalone task on its own.
+- **Never log connection strings/secrets** (e.g. `DATABASE_URL`), and never use `redis KEYS` —
+  use `SCAN` + `MGET` (see `health.redis` in `app.controller.ts`). HTML emails must
+  `escapeHtml` user-supplied values.
 - **`cloudinary` is an unused dependency** — file uploads go through Cloudflare R2
   (`@aws-sdk/client-s3` against an R2 endpoint), not Cloudinary. Don't add Cloudinary code
   expecting it to be wired up; it isn't.

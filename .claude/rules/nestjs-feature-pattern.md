@@ -27,6 +27,9 @@ Use this when the feature owns a Postgres table.
   resource name (`notifications`); this differs from `tutor-service`/`user`'s convention of
   naming the list key after the resource. Match this repo's own existing shape (`data`) for any
   new list endpoint here rather than importing the other convention.
+- Paginated list: run the `count()` query and the rows query together with `Promise.all`.
+  `delete`/state-transition service methods use one repo call and 404 on a `null`/`false`
+  result (no pre-`findById`).
 - Module: `providers: [FooService, FooRepository]`, `exports: [FooService]`.
 
 ## Shape 2 — stateless service, no repository (`email`)
@@ -74,6 +77,10 @@ exists, reachable once the caller's `RmqProducer` routes its prefix to `third_qu
 
 If a feature here ever needs to **call out** to another service, copy gateway's
 `src/features/rabbitmq/` module (`RmqModule`/`RmqProducer`) as `user` did.
+
+Upload gotcha: `UploadService.upload` always re-encodes images to JPEG via Sharp, so the stored
+key ends in `.jpg` and the returned `mimetype` is `image/jpeg` (not the original); non-images keep
+their original extension (`bin` if none).
 
 ## General
 

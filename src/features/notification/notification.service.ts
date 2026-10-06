@@ -49,9 +49,9 @@ export class NotificationService {
   }
 
   async markAsRead(id: string) {
-    const note = await this.repo.findById(id);
+    const note = await this.repo.markAsRead(id);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
-    return this.repo.markAsRead(id);
+    return note;
   }
 
   async markAllAsRead(userId: string) {
@@ -59,9 +59,8 @@ export class NotificationService {
   }
 
   async delete(id: string) {
-    const note = await this.repo.findById(id);
-    if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
-    await this.repo.delete(id);
+    const deleted = await this.repo.delete(id);
+    if (!deleted) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return { id };
   }
 }

@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { SendMailOptions } from '@packages/interfaces';
 
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
@@ -30,12 +32,12 @@ export class EmailService {
   }
 
   async sendForgotPasswordMail(params: { to: string; resetToken: string; displayName: string }) {
-    const resetUrl = `${this.resetPasswordUrlBase}/reset-password?token=${params.resetToken}`;
+    const resetUrl = `${this.resetPasswordUrlBase}/reset-password?token=${encodeURIComponent(params.resetToken)}`;
 
     return this.sendMail({
       to: params.to,
       subject: 'Reset your password',
-      html: `<p>Hi ${params.displayName},</p><p>We received a request to reset your password. Click the link below to choose a new one:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 5 minutes. If you didn't request this, you can ignore this email.</p>`,
+      html: `<p>Hi ${escapeHtml(params.displayName)},</p><p>We received a request to reset your password. Click the link below to choose a new one:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 5 minutes. If you didn't request this, you can ignore this email.</p>`,
       text: `Hi ${params.displayName}, reset your password here: ${resetUrl} (expires in 5 minutes)`,
     });
   }

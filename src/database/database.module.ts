@@ -37,9 +37,7 @@ export const DATABASE_ENVS = [
           databaseUrl ||
           (() => {
             const url = new URL(
-              `postgres://${configService.getOrThrow(
-                'POSTGRES_HOST',
-              )}:${configService.getOrThrow(
+              `postgres://${configService.getOrThrow('POSTGRES_HOST')}:${configService.getOrThrow(
                 'POSTGRES_PORT',
               )}/${configService.getOrThrow('POSTGRES_DB')}`,
             );
@@ -57,7 +55,6 @@ export const DATABASE_ENVS = [
 
         for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
           try {
-            logger.log('this connection:', databaseUrl);
             await client`SELECT 1`;
             logger.log('✅ PostgreSQL connected.');
             return drizzle(client, { schema: tables });
