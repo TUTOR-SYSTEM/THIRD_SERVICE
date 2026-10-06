@@ -14,8 +14,8 @@ import 'dotenv/config';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '@tutor/gateway/schema';
-import { testScenarios } from '@tutor/gateway/schema';
+import * as schema from '../src/database/schema';
+import { testScenarios } from '../src/database/schema';
 
 type Category = 'valid' | 'auth' | 'validation' | 'not_found' | 'domain';
 type Seed = {

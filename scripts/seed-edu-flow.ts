@@ -9,8 +9,8 @@
 import 'dotenv/config';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
-import * as schema from '@tutor/gateway/schema';
-import { grades } from '@tutor/gateway/schema';
+import * as schema from '../src/database/schema';
+import { grades } from '../src/database/schema';
 
 function resolveDatabaseUrl(): string {
   const databaseUrl = process.env.DATABASE_URL?.trim();

@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { ERROR_MESSAGES } from 'src/data/constants';
 import type { InferSelectModel } from 'drizzle-orm';
-import type { testScenarios } from '@tutor/gateway/schema';
+import type { testScenarios } from '../../database/schema';
 import type {
   CreateTestScenarioDto,
   GetTestScenariosQueryDto,

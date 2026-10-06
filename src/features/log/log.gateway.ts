@@ -11,7 +11,7 @@ import { eq } from 'drizzle-orm';
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { Server, Socket } from 'socket.io';
 import { DRIZZLE } from '../../database/database.module';
-import { requestLogs, users } from '@tutor/gateway/schema';
+import { requestLogs, users } from '../../database/schema';
 
 type RequestLogRow = typeof requestLogs.$inferSelect;
 

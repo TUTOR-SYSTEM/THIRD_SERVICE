@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.git
+.claude
+.opencode
+.vscode
+.env
+.env.*
+*.md
+Dockerfile
+.dockerignore

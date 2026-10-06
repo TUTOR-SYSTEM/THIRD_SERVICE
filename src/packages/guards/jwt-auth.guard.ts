@@ -3,14 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { IS_PUBLIC_KEY } from '@packages/decorators';
-import { DRIZZLE } from 'src/database/database.module';
+import { DRIZZLE } from '../../database/database.module';
 import type { Request } from 'express';
 import { Inject } from '@nestjs/common';
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
 
 import type { JwtUserRole } from '@packages/helpers';
-import { users } from '@tutor/gateway/schema';
+import { users } from '../../database/schema';
 
 /** Access-token payload shape (matches access JWTs from `signAccessToken`). */
 export type JwtGuardUser = {

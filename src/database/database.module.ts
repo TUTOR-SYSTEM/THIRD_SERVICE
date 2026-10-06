@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 
-import * as schema from '@tutor/gateway/schema';
+import * as schema from './schema';
 import { validateRequiredEnvs } from '@packages/helpers';
 
 // esModuleInterop wraps the schema in a null-prototype `default` namespace that drizzle's is() chokes on.

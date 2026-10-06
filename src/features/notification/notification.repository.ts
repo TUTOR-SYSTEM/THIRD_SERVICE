@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
-import { notifications } from '@tutor/gateway/schema';
+import { notifications } from '../../database/schema';
 import type {
   CreateNotificationDto,
   GetNotificationsQueryDto,
