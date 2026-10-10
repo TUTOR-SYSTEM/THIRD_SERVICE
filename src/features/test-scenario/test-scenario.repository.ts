@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
-import { requestLogs, testRuns, testScenarios } from '@tutor/gateway/schema';
+import { requestLogs, testRuns, testScenarios } from '../../database/schema';
 import type {
   CreateTestScenarioDto,
   GetTestScenariosQueryDto,
@@ -10,6 +10,10 @@ import type {
   ScenarioStatsDto,
   UpdateTestScenarioDto,
 } from '@packages/entities/test-scenario';
+
+/** Identity of a scenario for de-duplication: same method + path + name = same case. */
+export const scenarioKey = (s: { method: string; path: string; name: string }) =>
+  `${s.method} ${s.path} ${s.name}`;
 
 export type CreateTestRunData = {
   scenarioId: string;
@@ -19,6 +23,8 @@ export type CreateTestRunData = {
   passed: boolean;
   durationMs: number;
   errorMessage?: string;
+  responseBody?: string;
+  requestPath?: string;
   triggeredBy?: string;
 };
 
@@ -108,6 +114,19 @@ export class TestScenarioRepository {
     return flows;
   }
 
+  /** `method path name` of every saved scenario — what the generator dedupes against. */
+  async existingKeys(): Promise<Set<string>> {
+    const rows = await this.db
+      .select({ method: testScenarios.method, path: testScenarios.path, name: testScenarios.name })
+      .from(testScenarios);
+    return new Set(rows.map((r) => scenarioKey(r)));
+  }
+
+  async createMany(data: CreateTestScenarioDto[]) {
+    if (data.length === 0) return [];
+    return this.db.insert(testScenarios).values(data).returning();
+  }
+
   async findById(id: string) {
     const [row] = await this.db.select().from(testScenarios).where(eq(testScenarios.id, id));
     return row ?? null;
@@ -125,6 +144,15 @@ export class TestScenarioRepository {
   async delete(id: string) {
     const [row] = await this.db.delete(testScenarios).where(eq(testScenarios.id, id)).returning();
     return row ?? null;
+  }
+
+  async findRuns(scenarioId: string, limit: number) {
+    return this.db
+      .select()
+      .from(testRuns)
+      .where(eq(testRuns.scenarioId, scenarioId))
+      .orderBy(desc(testRuns.createdAt))
+      .limit(limit);
   }
 
   async createRun(data: CreateTestRunData) {
