@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { BadRequestException, Controller, NotFoundException } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { UploadService } from './upload.service';
 import type { MulterFile, UploadResponse } from './upload.interface';
@@ -30,12 +30,21 @@ export class UploadRpcController {
 
   @MessagePattern('upload.uploadMultiple')
   async uploadMultiple(@Payload() payload: { files: UploadRpcFile[] }): Promise<UploadResponse[]> {
-    return this.uploadService.uploadMultiple(payload.files.map((file) => this.reconstruct(file)));
+    return this.uploadService.uploadMultiple(
+      (payload.files ?? []).map((file) => this.reconstruct(file)),
+    );
   }
 
   @MessagePattern('upload.download')
   async download(@Payload() payload: { key: string }) {
-    const { stream, contentType, contentLength } = await this.uploadService.download(payload.key);
+    const { stream, contentType, contentLength } = await this.uploadService
+      .download(payload.key)
+      .catch((err: { name?: string }) => {
+        if (err.name === 'NoSuchKey' || err.name === 'NotFound') {
+          throw new NotFoundException(`File "${payload.key}" not found`);
+        }
+        throw err;
+      });
     const chunks: Buffer[] = [];
     for await (const chunk of stream) {
       chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
@@ -54,6 +63,7 @@ export class UploadRpcController {
   }
 
   private reconstruct(file: UploadRpcFile): MulterFile {
+    if (!file?.buffer?.data) throw new BadRequestException('file is required');
     return {
       fieldname: file.fieldname,
       originalname: file.originalname,

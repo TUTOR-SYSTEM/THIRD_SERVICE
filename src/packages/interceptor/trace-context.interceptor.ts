@@ -28,7 +28,14 @@ const SENSITIVE_KEYS = [
   'token',
   'accessToken',
   'refreshToken',
+  'resetToken',
+  'value',
+  'secret',
+  'authorization',
 ];
+
+/** Patterns whose payload/response carry credentials (sessions, reset tokens) — body never logged. */
+const BODYLESS_PATTERN_PREFIXES = ['log.', 'redis.', 'email.'];
 
 function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);
@@ -148,7 +155,8 @@ export class TraceContextInterceptor implements NestInterceptor {
     this.logger.log(`[RPC] ${pattern} <- ${trace}`);
     // Don't log the logging plumbing itself as a request row.
     const isLogPattern = pattern.startsWith('log.');
-    const requestBody = isLogPattern ? undefined : previewPayload(context);
+    const isBodyless = BODYLESS_PATTERN_PREFIXES.some((prefix) => pattern.startsWith(prefix));
+    const requestBody = isBodyless ? undefined : previewPayload(context);
 
     return new Observable((subscriber) => {
       let responseData: unknown;
@@ -192,7 +200,7 @@ export class TraceContextInterceptor implements NestInterceptor {
                   parentTraceId,
                   requestBody,
                   host: resolveServiceHost(),
-                  responseBody: previewResponse(responseData),
+                  responseBody: isBodyless ? undefined : previewResponse(responseData),
                 });
               }
               subscriber.complete();

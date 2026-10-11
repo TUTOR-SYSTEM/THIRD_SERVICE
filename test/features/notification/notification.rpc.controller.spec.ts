@@ -24,7 +24,10 @@ describe('NotificationRpcController', () => {
     ['notification.delete', 'del'],
   ])('exposes %s on %s', (pattern, method) => {
     expect(
-      Reflect.getMetadata(PATTERN_METADATA, NotificationRpcController.prototype[method as keyof NotificationRpcController]),
+      Reflect.getMetadata(
+        PATTERN_METADATA,
+        NotificationRpcController.prototype[method as keyof NotificationRpcController],
+      ),
     ).toEqual([pattern]);
   });
 
@@ -51,14 +54,15 @@ describe('NotificationRpcController', () => {
     service.delete.mockResolvedValue({ id: 'n' });
 
     await controller.markAllAsRead({ userId: 'u' });
-    await controller.getById({ id: 'n' });
-    await controller.markAsRead({ id: 'n' });
-    await controller.del({ id: 'n' });
+    await controller.getById({ id: 'n', userId: 'u' });
+    await controller.markAsRead({ id: 'n', userId: 'u' });
+    await controller.del({ id: 'n', userId: 'u' });
 
     expect(service.markAllAsRead).toHaveBeenCalledWith('u');
-    expect(service.findById).toHaveBeenCalledWith('n');
-    expect(service.markAsRead).toHaveBeenCalledWith('n');
-    expect(service.delete).toHaveBeenCalledWith('n');
+    // userId is forwarded so the service can scope the row to its owner (IDOR guard).
+    expect(service.findById).toHaveBeenCalledWith('n', 'u');
+    expect(service.markAsRead).toHaveBeenCalledWith('n', 'u');
+    expect(service.delete).toHaveBeenCalledWith('n', 'u');
   });
 
   it('propagates NotFound from the service so the RPC filter can translate it', async () => {

@@ -14,6 +14,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { pipeline } from 'stream';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -24,7 +25,6 @@ import {
   ApiResponse as SwaggerResponse,
 } from '@nestjs/swagger';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { Public } from '@packages/decorators';
 import { StatusCodes } from 'http-status-codes';
 import { UploadService } from './upload.service';
 import type { MulterFile, UploadResponse } from './upload.interface';
@@ -35,7 +35,6 @@ import type { MulterFile, UploadResponse } from './upload.interface';
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
-  @Public()
   @Post()
   @UseInterceptors(FileInterceptor('file'))
   @HttpCode(StatusCodes.CREATED)
@@ -55,7 +54,6 @@ export class UploadController {
     return this.uploadService.upload(file);
   }
 
-  @Public()
   @Post('multiple')
   @UseInterceptors(FilesInterceptor('files', 10))
   @HttpCode(StatusCodes.CREATED)
@@ -78,7 +76,6 @@ export class UploadController {
     return this.uploadService.uploadMultiple(files);
   }
 
-  @Public()
   @Get('download')
   @ApiOperation({
     summary: 'Download file',
@@ -92,11 +89,13 @@ export class UploadController {
     if (!key) throw new BadRequestException('key query param is required');
     try {
       const { stream, contentType, contentLength } = await this.uploadService.download(key);
-      const filename = key.split('/').pop() as string;
+      const filename = (key.split('/').pop() as string).replace(/[^\w.-]/g, '_');
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       if (contentLength !== undefined) res.setHeader('Content-Length', contentLength);
-      stream.pipe(res);
+      // `pipeline` forwards stream errors and destroys both ends, so a mid-transfer R2 failure
+      // or a client disconnect can't surface as an uncaught 'error' event.
+      pipeline(stream, res, () => undefined);
     } catch (err: unknown) {
       const e = err as { name?: string };
       if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
@@ -106,7 +105,6 @@ export class UploadController {
     }
   }
 
-  @Public()
   @Delete(':key')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Delete file' })

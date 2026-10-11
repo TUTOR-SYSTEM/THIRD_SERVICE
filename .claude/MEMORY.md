@@ -166,3 +166,14 @@ Cross-service rules (RPC contract, shared conventions) live one level up in `api
 
 **Do NOT read entire source code.** Only read files necessary for the task — see `CLAUDE.md`'s
 "IMPORTANT: Selective File Reading" section for the full breakdown.
+
+## Security hardening (2026-10-11, from gateway/reviews/third-review.md)
+
+- Fixed: upload/email-test routes no longer `@Public()`; no fallback JWT secret
+  (`resolveJwtAccessSecret` throws); notification id routes scoped to received/sent user;
+  `redis.*`/`email.*`/`log.*` bodies not stored in `request_logs`; Redis 5s command timeout +
+  strict `set` validation; upload size cap + `stream.pipeline` download; rate limiter fails open.
+- `redis.controller.ts` (HTTP) was deleted in the working tree before this — only RPC `redis.*` remains.
+- NOT done: RMQ manual ack/DLQ (TRD-08), payload validation on every RPC handler (TRD-11),
+  Resend retry/timeout (TRD-12), mimetype whitelist (TRD-15), `recreate-db.ts` prod guard (TRD-21).
+  Test `redis.controller.spec.ts` is stale (imports the deleted controller).

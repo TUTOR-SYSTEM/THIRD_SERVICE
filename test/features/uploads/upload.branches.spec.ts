@@ -1,5 +1,5 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { Readable } from 'stream';
+import { Readable, Writable } from 'stream';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UploadController } from 'src/features/uploads/upload.controller';
@@ -19,18 +19,20 @@ describe('UploadController.download — branches', () => {
 
   it('omits Content-Length when the object size is unknown', async () => {
     service.download.mockResolvedValue({ stream: Readable.from([]), contentType: 'text/plain' });
-    const res = { setHeader: jest.fn() } as never as { setHeader: jest.Mock };
-    const pipe = jest.spyOn(Readable.prototype, 'pipe').mockImplementation((dest) => dest as never);
+    const res = Object.assign(new Writable({ write: (_c, _e, cb) => cb() }), {
+      setHeader: jest.fn(),
+    });
 
     await controller.download('a/b.txt', res as never);
 
     expect(res.setHeader).not.toHaveBeenCalledWith('Content-Length', expect.anything());
-    pipe.mockRestore();
   });
 
   it('maps a missing R2 object to 404', async () => {
     service.download.mockRejectedValue(Object.assign(new Error('x'), { name: 'NoSuchKey' }));
-    await expect(controller.download('gone.jpg', response())).rejects.toBeInstanceOf(NotFoundException);
+    await expect(controller.download('gone.jpg', response())).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('rethrows any other storage error unchanged', async () => {
@@ -61,13 +63,17 @@ describe('UploadRpcController.download — chunk types', () => {
 describe('UploadService.onModuleInit — failure logging', () => {
   it('logs the bare error name and message when R2 fails without HTTP metadata', async () => {
     const error = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
-    const send = jest.fn().mockRejectedValue(Object.assign(new Error('socket closed'), { name: 'NetworkingError' }));
+    const send = jest
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('socket closed'), { name: 'NetworkingError' }));
     const config = { get: (_: string, fallback?: string) => fallback } as unknown as ConfigService;
     const service = new UploadService({ send } as never, config);
 
     await service.onModuleInit();
 
-    expect(error).toHaveBeenCalledWith('Cloudflare R2 connection failed: NetworkingError — socket closed');
+    expect(error).toHaveBeenCalledWith(
+      'Cloudflare R2 connection failed: NetworkingError — socket closed',
+    );
     error.mockRestore();
   });
 });

@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -9,7 +9,7 @@ import {
 import type { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
-import { S3_CLIENT } from './upload.constant';
+import { MAX_UPLOAD_BYTES, S3_CLIENT } from './upload.constant';
 import type { MulterFile, UploadResponse } from './upload.interface';
 
 @Injectable()
@@ -54,6 +54,10 @@ export class UploadService implements OnModuleInit {
 
   async upload(file: MulterFile, folder = 'uploads'): Promise<UploadResponse> {
     if (!this.s3) throw new Error('Cloudflare R2 not configured');
+    if (!file?.buffer || !file.mimetype) throw new BadRequestException('file is required');
+    if (file.buffer.length > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException(`File exceeds ${MAX_UPLOAD_BYTES} bytes`);
+    }
     const isImage = file.mimetype.startsWith('image/');
     const dot = file.originalname.lastIndexOf('.');
     const originalExt = dot >= 0 ? file.originalname.slice(dot + 1) : '';
@@ -64,11 +68,15 @@ export class UploadService implements OnModuleInit {
     let processedBuffer = file.buffer;
 
     if (isImage) {
-      processedBuffer = await sharp(file.buffer)
-        .rotate()
-        .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 80, mozjpeg: true })
-        .toBuffer();
+      try {
+        processedBuffer = await sharp(file.buffer)
+          .rotate()
+          .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80, mozjpeg: true })
+          .toBuffer();
+      } catch {
+        throw new BadRequestException('Invalid image file');
+      }
     }
 
     await this.s3.send(
@@ -110,6 +118,18 @@ export class UploadService implements OnModuleInit {
   }
 
   async uploadMultiple(files: MulterFile[], folder = 'uploads'): Promise<UploadResponse[]> {
-    return Promise.all(files.map((f) => this.upload(f, folder)));
+    if (!Array.isArray(files) || files.length === 0) {
+      throw new BadRequestException('files is required');
+    }
+    const results = await Promise.allSettled(files.map((f) => this.upload(f, folder)));
+    const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+    if (failed) {
+      // Don't leave the files that did land in the bucket orphaned when the batch fails.
+      await Promise.allSettled(
+        results.flatMap((r) => (r.status === 'fulfilled' ? [this.delete(r.value.key)] : [])),
+      );
+      throw failed.reason;
+    }
+    return results.map((r) => (r as PromiseFulfilledResult<UploadResponse>).value);
   }
 }

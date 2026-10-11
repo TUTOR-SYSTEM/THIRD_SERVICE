@@ -11,6 +11,7 @@ import { eq } from 'drizzle-orm';
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { Server, Socket } from 'socket.io';
 import { DRIZZLE } from '../../database/database.module';
+import { resolveJwtAccessSecret } from '../../packages/configs/jwt-sign.config';
 import { requestLogs, users } from '../../database/schema';
 
 type RequestLogRow = typeof requestLogs.$inferSelect;
@@ -46,17 +47,14 @@ export class LogGateway implements OnGatewayConnection, OnGatewayDisconnect {
     try {
       const token: unknown =
         client.handshake.auth?.token ??
-        (client.handshake.headers?.authorization)?.replace('Bearer ', '');
+        client.handshake.headers?.authorization?.replace('Bearer ', '');
 
       if (!token || typeof token !== 'string') {
         client.disconnect();
         return;
       }
 
-      const accessSecret =
-        this.configService.get<string>('JWT_ACCESS_SECRET') ??
-        this.configService.get<string>('JWT_SECRET') ??
-        'dev-insecure-jwt-secret';
+      const accessSecret = resolveJwtAccessSecret(this.configService);
 
       const decoded: unknown = this.jwtService.verify(token, { secret: accessSecret });
       if (

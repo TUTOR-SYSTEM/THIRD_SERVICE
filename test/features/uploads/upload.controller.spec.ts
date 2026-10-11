@@ -1,20 +1,21 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Readable } from 'stream';
+import { Readable, Writable } from 'stream';
 import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
 import { UploadController } from 'src/features/uploads/upload.controller';
 import { UploadService } from 'src/features/uploads/upload.service';
 
-type FakeRes = { setHeader: jest.Mock; headers: Record<string, unknown> };
+type FakeRes = Writable & { setHeader: jest.Mock; headers: Record<string, unknown> };
 
+// A real Writable, because the controller now uses `stream.pipeline` (which needs a stream).
 const fakeRes = (): FakeRes => {
   const headers: Record<string, unknown> = {};
-  return {
-    headers,
-    setHeader: jest.fn((name: string, value: unknown) => {
-      headers[name] = value;
-    }),
-  };
+  const res = new Writable({ write: (_chunk, _enc, cb) => cb() }) as FakeRes;
+  res.headers = headers;
+  res.setHeader = jest.fn((name: string, value: unknown) => {
+    headers[name] = value;
+  });
+  return res;
 };
 
 // uuid@14 is ESM-only; the controller specs never assert on keys.
@@ -31,7 +32,7 @@ describe('UploadController (HTTP)', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('marks every upload route as @Public (called by services without a user JWT)', () => {
+  it('requires a JWT on every upload route (none is @Public; the gateway reaches us over RMQ)', () => {
     const reflector = new Reflector();
     for (const handler of [
       UploadController.prototype.upload,
@@ -39,12 +40,19 @@ describe('UploadController (HTTP)', () => {
       UploadController.prototype.download,
       UploadController.prototype.delete,
     ]) {
-      expect(reflector.get<boolean>(IS_PUBLIC_KEY, handler)).toBe(true);
+      expect(reflector.get<boolean>(IS_PUBLIC_KEY, handler)).toBeUndefined();
     }
   });
 
   it('upload delegates the multer file to the service', async () => {
-    const file = { originalname: 'a.png', mimetype: 'image/png', buffer: Buffer.from('x'), size: 1, fieldname: 'file', encoding: '7bit' };
+    const file = {
+      originalname: 'a.png',
+      mimetype: 'image/png',
+      buffer: Buffer.from('x'),
+      size: 1,
+      fieldname: 'file',
+      encoding: '7bit',
+    };
     service.upload.mockResolvedValue({ key: 'k' });
 
     await expect(controller.upload(file)).resolves.toEqual({ key: 'k' });
@@ -54,7 +62,9 @@ describe('UploadController (HTTP)', () => {
   it('uploadMultiple delegates the file list to the service', async () => {
     service.uploadMultiple.mockResolvedValue([{ key: 'a' }]);
 
-    await expect(controller.uploadMultiple([{ originalname: 'a' } as never])).resolves.toEqual([{ key: 'a' }]);
+    await expect(controller.uploadMultiple([{ originalname: 'a' } as never])).resolves.toEqual([
+      { key: 'a' },
+    ]);
   });
 
   it('download rejects a missing key with 400 before touching R2', async () => {
@@ -63,22 +73,35 @@ describe('UploadController (HTTP)', () => {
   });
 
   it('download streams the object with Content-Type, Content-Disposition and Content-Length', async () => {
-    const stream = Object.assign(Readable.from([]), { pipe: jest.fn() });
-    service.download.mockResolvedValue({ stream, contentType: 'image/jpeg', contentLength: 9 });
+    service.download.mockResolvedValue({
+      stream: Readable.from([Buffer.from('data')]),
+      contentType: 'image/jpeg',
+      contentLength: 9,
+    });
     const res = fakeRes();
+    const finished = new Promise((resolve) => res.on('finish', resolve));
 
     await controller.download('uploads/photo.jpg', res as never);
+    await finished;
 
     expect(res.headers).toEqual({
       'Content-Type': 'image/jpeg',
       'Content-Disposition': 'attachment; filename="photo.jpg"',
       'Content-Length': 9,
     });
-    expect(stream.pipe).toHaveBeenCalledWith(res);
+  });
+
+  it('download sanitises the filename used in Content-Disposition', async () => {
+    service.download.mockResolvedValue({ stream: Readable.from([]), contentType: 'text/plain' });
+    const res = fakeRes();
+
+    await controller.download('uploads/we"ird\r\nname.txt', res as never);
+
+    expect(res.headers['Content-Disposition']).toBe('attachment; filename="we_ird__name.txt"');
   });
 
   it('download omits Content-Length when R2 does not report it', async () => {
-    const stream = Object.assign(Readable.from([]), { pipe: jest.fn() });
+    const stream = Readable.from([]);
     service.download.mockResolvedValue({ stream, contentType: 'application/pdf' });
     const res = fakeRes();
 
@@ -90,7 +113,9 @@ describe('UploadController (HTTP)', () => {
   it.each(['NoSuchKey', 'NotFound'])('maps R2 %s to a 404 NotFoundException', async (name) => {
     service.download.mockRejectedValue(Object.assign(new Error('x'), { name }));
 
-    await expect(controller.download('uploads/missing.jpg', fakeRes() as never)).rejects.toThrow(NotFoundException);
+    await expect(controller.download('uploads/missing.jpg', fakeRes() as never)).rejects.toThrow(
+      NotFoundException,
+    );
   });
 
   it('re-throws unexpected download errors unchanged', async () => {

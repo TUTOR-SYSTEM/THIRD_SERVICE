@@ -59,9 +59,9 @@ describe('JwtAuthGuard', () => {
   it.each(['Basic abc', 'Bearer', 'Bearer ', 'token-only'])(
     'rejects a malformed Authorization header: "%s"',
     async (authorization) => {
-      await expect(
-        guard.canActivate(contextWith({ authorization }).ctx),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(guard.canActivate(contextWith({ authorization }).ctx)).rejects.toThrow(
+        UnauthorizedException,
+      );
     },
   );
 
@@ -70,12 +70,12 @@ describe('JwtAuthGuard', () => {
       throw new Error('jwt expired');
     });
 
-    await expect(
-      guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
-  it('verifies with JWT_ACCESS_SECRET and falls back to JWT_SECRET, then the dev default', async () => {
+  it('verifies with JWT_ACCESS_SECRET, falls back to JWT_SECRET, and throws when neither is set', async () => {
     await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
     expect(jwt.verify).toHaveBeenLastCalledWith('t', { secret: 'access-secret' });
 
@@ -83,9 +83,13 @@ describe('JwtAuthGuard', () => {
     await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
     expect(jwt.verify).toHaveBeenLastCalledWith('t', { secret: 'legacy' });
 
+    // No built-in fallback: a public constant would let anyone mint a valid ADMIN token.
     config.get.mockReturnValue(undefined);
-    await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
-    expect(jwt.verify).toHaveBeenLastCalledWith('t', { secret: 'dev-insecure-jwt-secret' });
+    jwt.verify.mockClear();
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      'JWT_ACCESS_SECRET',
+    );
+    expect(jwt.verify).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -96,17 +100,17 @@ describe('JwtAuthGuard', () => {
   ])('rejects %s', async (_label, payload) => {
     jwt.verify.mockReturnValue(payload);
 
-    await expect(
-      guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('rejects a token whose user no longer exists in the database', async () => {
     userRows = [];
 
-    await expect(
-      guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 
   it('attaches the decoded user to the request on success', async () => {
@@ -128,8 +132,8 @@ describe('JwtAuthGuard', () => {
   it('rejects when the role claim is not a string', async () => {
     jwt.verify.mockReturnValue({ ...validPayload, role: 42 });
 
-    await expect(
-      guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx),
-    ).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
   });
 });

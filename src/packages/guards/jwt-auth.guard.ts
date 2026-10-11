@@ -10,6 +10,7 @@ import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { eq } from 'drizzle-orm';
 
 import type { JwtUserRole } from '@packages/helpers';
+import { resolveJwtAccessSecret } from '../configs/jwt-sign.config';
 import { users } from '../../database/schema';
 
 /** Access-token payload shape (matches access JWTs from `signAccessToken`). */
@@ -83,10 +84,7 @@ export class JwtAuthGuard implements CanActivate {
       throw new UnauthorizedException('Unauthorized ...');
     }
 
-    const accessSecret =
-      this.configService.get<string>('JWT_ACCESS_SECRET') ??
-      this.configService.get<string>('JWT_SECRET') ??
-      'dev-insecure-jwt-secret';
+    const accessSecret = resolveJwtAccessSecret(this.configService);
 
     let decoded: unknown;
     try {

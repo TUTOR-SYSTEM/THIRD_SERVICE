@@ -78,30 +78,41 @@ export class NotificationRepository {
     };
   }
 
-  async findById(id: string) {
-    const [note] = await this.db.select().from(notifications).where(eq(notifications.id, id));
+  /** Row is visible to its recipient or its sender; with no `userId` the check is skipped. */
+  private scopeById(id: string, userId?: string): SQL {
+    const byId = eq(notifications.id, id);
+    if (!userId) return byId;
+    return and(byId, or(eq(notifications.userId, userId), eq(notifications.senderId, userId)))!;
+  }
+
+  async findById(id: string, userId?: string) {
+    const [note] = await this.db.select().from(notifications).where(this.scopeById(id, userId));
     return note ?? null;
   }
 
-  async markAsRead(id: string) {
+  async markAsRead(id: string, userId?: string) {
     const [note] = await this.db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.id, id))
+      .where(this.scopeById(id, userId))
       .returning();
     return note ?? null;
   }
 
   async markAllAsRead(userId: string) {
-    const result = await this.db
+    const updated = await this.db
       .update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.userId, userId));
-    return result;
+      .where(or(eq(notifications.userId, userId), eq(notifications.senderId, userId)))
+      .returning({ id: notifications.id });
+    return { markedAll: true, count: updated.length };
   }
 
-  async delete(id: string) {
-    const [note] = await this.db.delete(notifications).where(eq(notifications.id, id)).returning();
+  async delete(id: string, userId?: string) {
+    const [note] = await this.db
+      .delete(notifications)
+      .where(this.scopeById(id, userId))
+      .returning();
     return !!note;
   }
 }

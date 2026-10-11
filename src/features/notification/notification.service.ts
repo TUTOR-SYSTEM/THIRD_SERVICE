@@ -23,6 +23,12 @@ export class NotificationService {
     }
   }
 
+  private assertUuid(id: string): void {
+    if (!id || !checkUuidValid({ data: id })) {
+      throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
+    }
+  }
+
   async createNotificationService(dto: CreateNotificationDto) {
     if (!dto.senderId || (dto.senderId && !checkUuidValid({ data: dto.senderId }))) {
       throw new BadRequestException(ERROR_MESSAGES.USER_ID_NOT_VALID);
@@ -42,14 +48,17 @@ export class NotificationService {
     return this.repo.findAll(userId, query);
   }
 
-  async findById(id: string) {
-    const note = await this.repo.findById(id);
+  /** `userId` scopes the lookup to rows the caller received or sent (404 otherwise). */
+  async findById(id: string, userId?: string) {
+    this.assertUuid(id);
+    const note = await this.repo.findById(id, userId);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
 
-  async markAsRead(id: string) {
-    const note = await this.repo.markAsRead(id);
+  async markAsRead(id: string, userId?: string) {
+    this.assertUuid(id);
+    const note = await this.repo.markAsRead(id, userId);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
@@ -58,8 +67,9 @@ export class NotificationService {
     return this.repo.markAllAsRead(userId);
   }
 
-  async delete(id: string) {
-    const deleted = await this.repo.delete(id);
+  async delete(id: string, userId?: string) {
+    this.assertUuid(id);
+    const deleted = await this.repo.delete(id, userId);
     if (!deleted) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return { id };
   }

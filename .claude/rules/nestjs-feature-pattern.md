@@ -15,8 +15,10 @@ Use this when the feature owns a Postgres table.
   `new ZodValidationPipe<Dto>(schema)`, reads `@CurrentUser() user: JwtGuardUser`.
 - Service: validates FK-shaped ids with `checkUuidValid` (see `createNotificationService`
   checking `senderId`/`classId`/`studentId`) and throws `BadRequestException`/`NotFoundException`
-  — there is **no ownership check** (`row.tutorId !== userId`) pattern here, because
-  notifications aren't owned by a single actor the way a `class` row is owned by a tutor. Also
+  — there is no `row.tutorId !== userId` ownership model, but `findById`/`markAsRead`/`delete`
+  take an optional `userId` and scope the row to notifications that user **received or sent**
+  (404 otherwise); the HTTP controller always passes `user.id`, and gateway's `notification.getById|
+  markAsRead|delete` payloads carry `userId`. Keep that when adding notification endpoints. Also
   exposes an internal fire-and-forget method (`createInternal`) meant to be called from other
   in-process code without the validation/exception path — currently unused (nothing in this repo
   calls it yet; it's there for a future same-process caller, not a cross-repo one — a cross-repo
@@ -37,7 +39,7 @@ Use this when the feature owns a Postgres table.
 `{name}.controller.ts` → `{name}.service.ts` + `{name}.module.ts`. No repository, no Zod
 entities under `src/packages/entities/` — the service wraps an external API (Resend) directly
 and its methods take plain TS object params, not Zod-validated DTOs. `EmailController` currently
-exposes only a `@Public()` test route; real send methods (`sendForgotPasswordMail`) are called
+exposes only a JWT-protected test route; real send methods (`sendForgotPasswordMail`) are called
 from service code, not routed through HTTP.
 
 ## Shape 3 — provider/interface, no repository, no entities (`uploads`)
@@ -77,6 +79,11 @@ exists, reachable once the caller's `RmqProducer` routes its prefix to `third_qu
 
 If a feature here ever needs to **call out** to another service, copy gateway's
 `src/features/rabbitmq/` module (`RmqModule`/`RmqProducer`) as `user` did.
+
+Upload limits: Multer (`UploadModule`) caps files at `MAX_UPLOAD_BYTES` (10MB, 10 files) and
+`UploadService.upload` re-checks size for the RPC path; a missing file or undecodable image is a 400,
+`uploadMultiple` deletes already-uploaded files if one fails, and `UploadController.download` streams
+with `stream.pipeline` (never bare `pipe`).
 
 Upload gotcha: `UploadService.upload` always re-encodes images to JPEG via Sharp, so the stored
 key ends in `.jpg` and the returned `mimetype` is `image/jpeg` (not the original); non-images keep

@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { RedisService } from 'src/features/redis/redis.service';
 
@@ -68,10 +68,19 @@ describe('RedisService', () => {
 
     it('falls back to host/port/password when REDIS_URL is blank', () => {
       new RedisService(
-        makeConfig({ REDIS_URL: '   ', REDIS_HOST: 'redis.internal', REDIS_PORT: '6399', REDIS_PASSWORD: 'pw' }),
+        makeConfig({
+          REDIS_URL: '   ',
+          REDIS_HOST: 'redis.internal',
+          REDIS_PORT: '6399',
+          REDIS_PASSWORD: 'pw',
+        }),
       );
 
-      expect(lastClient().args[0]).toMatchObject({ host: 'redis.internal', port: 6399, password: 'pw' });
+      expect(lastClient().args[0]).toMatchObject({
+        host: 'redis.internal',
+        port: 6399,
+        password: 'pw',
+      });
     });
 
     it('defaults to localhost:6380 with no password when nothing is configured', () => {
@@ -151,16 +160,33 @@ describe('RedisService', () => {
       expect(lastClient().set).toHaveBeenCalledWith('token', 'abc', 'EX', 300);
     });
 
-    it.each([
-      ['undefined', undefined],
-      ['zero', 0],
-      ['negative', -5],
-    ])('set omits expiry when ttlSeconds is %s', async (_label, ttl) => {
+    it('set omits expiry only when ttlSeconds is not provided', async () => {
       const service = new RedisService(makeConfig({}));
 
-      await service.set('k', 'v', ttl);
+      await service.set('k', 'v', undefined);
 
       expect(lastClient().set).toHaveBeenCalledWith('k', 'v');
+    });
+
+    // A bad TTL used to silently store a key that never expires (session / reset tokens).
+    it.each([
+      ['zero', 0],
+      ['negative', -5],
+      ['a numeric string', '300' as unknown as number],
+      ['NaN', NaN],
+    ])('set rejects ttlSeconds when it is %s', async (_label, ttl) => {
+      const service = new RedisService(makeConfig({}));
+
+      await expect(service.set('k', 'v', ttl)).rejects.toBeInstanceOf(BadRequestException);
+      expect(lastClient().set).not.toHaveBeenCalled();
+    });
+
+    it('set rejects a non-string value and an empty key', async () => {
+      const service = new RedisService(makeConfig({}));
+
+      await expect(service.set('k', { a: 1 } as never)).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.set('', 'v')).rejects.toBeInstanceOf(BadRequestException);
+      await expect(service.get('')).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('del returns 0 without touching Redis when no keys are given', async () => {

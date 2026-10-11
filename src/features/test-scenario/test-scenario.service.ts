@@ -141,12 +141,16 @@ export class TestScenarioService {
   async generate(
     dto: GenerateScenariosDto,
   ): Promise<{ scenarios: GeneratedScenarioDto[]; fixtures: FixtureSuggestionDto[] }> {
-    const proposals = dto.routes.flatMap((route) => generateForRoute(route, dto.categories));
-    const [existing, fixtures] = await Promise.all([this.repo.existingKeys(), this.fixtures.findAll()]);
+    const routes = dto.routes ?? [];
+    const proposals = routes.flatMap((route) => generateForRoute(route, dto.categories));
+    const [existing, fixtures] = await Promise.all([
+      this.repo.existingKeys(),
+      this.fixtures.findAll(),
+    ]);
     const fixtureKeys = new Set(fixtures.map((f) => f.key));
     return {
       scenarios: proposals.map((p) => ({ ...p, exists: existing.has(scenarioKey(p)) })),
-      fixtures: suggestFixtures(proposals, [...dto.routes, ...(dto.listRoutes ?? [])]).map((f) => ({
+      fixtures: suggestFixtures(proposals, [...routes, ...(dto.listRoutes ?? [])]).map((f) => ({
         ...f,
         exists: fixtureKeys.has(f.key),
       })),
@@ -284,7 +288,10 @@ export class TestScenarioService {
    * every `{{variable}}` in path, headers and body, and attaches the token when the template
    * didn't. Throws when a variable can't be filled (unknown name, fixture or login failure).
    */
-  private async buildRequest(scenario: InferSelectModel<typeof testScenarios>, callerToken?: string) {
+  private async buildRequest(
+    scenario: InferSelectModel<typeof testScenarios>,
+    callerToken?: string,
+  ) {
     const template = scenario.requestTemplate as {
       headers?: Record<string, string>;
       body?: unknown;
@@ -303,7 +310,10 @@ export class TestScenarioService {
     }
     const usesEmptyToken = (text: string) => collectVariables(text).some((n) => emptyTokens.has(n));
 
-    if (usesEmptyToken(scenario.path) || collectVariables(template.body).some((n) => emptyTokens.has(n))) {
+    if (
+      usesEmptyToken(scenario.path) ||
+      collectVariables(template.body).some((n) => emptyTokens.has(n))
+    ) {
       throw new Error(`a token variable has no value for auth profile "${profile}"`);
     }
 
@@ -346,7 +356,8 @@ export class TestScenarioService {
       if (!profile.success) throw new Error(`unknown auth profile in {{${name}}}`);
       return this.auth.tokenFor(profile.data, callerToken);
     }
-    if (name.startsWith('fixture.')) return this.fixtures.valueFor(name.slice('fixture.'.length), callerToken);
+    if (name.startsWith('fixture.'))
+      return this.fixtures.valueFor(name.slice('fixture.'.length), callerToken);
     const builtin = builtinVariable(name);
     if (builtin === undefined) throw new Error(`unknown variable {{${name}}}`);
     return builtin;

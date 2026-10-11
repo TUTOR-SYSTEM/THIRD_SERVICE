@@ -1,3 +1,4 @@
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Readable } from 'stream';
 import { PATTERN_METADATA } from '@nestjs/microservices/constants';
 import { UploadRpcController } from 'src/features/uploads/upload.rpc.controller';
@@ -33,7 +34,10 @@ describe('UploadRpcController', () => {
     ['upload.delete', 'del'],
   ])('binds %s to the %s handler', (pattern, method) => {
     expect(
-      Reflect.getMetadata(PATTERN_METADATA, UploadRpcController.prototype[method as keyof UploadRpcController]),
+      Reflect.getMetadata(
+        PATTERN_METADATA,
+        UploadRpcController.prototype[method as keyof UploadRpcController],
+      ),
     ).toEqual([pattern]);
   });
 
@@ -88,10 +92,22 @@ describe('UploadRpcController', () => {
     expect(result.filename).toBe('k');
   });
 
-  it('download propagates NoSuchKey from the service', async () => {
+  it('download maps NoSuchKey from the service to a 404 NotFoundException', async () => {
     service.download.mockRejectedValue(Object.assign(new Error('gone'), { name: 'NoSuchKey' }));
 
-    await expect(controller.download({ key: 'missing' })).rejects.toMatchObject({ name: 'NoSuchKey' });
+    await expect(controller.download({ key: 'missing' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('download re-throws other storage errors unchanged', async () => {
+    const boom = new Error('network');
+    service.download.mockRejectedValue(boom);
+
+    await expect(controller.download({ key: 'k' })).rejects.toBe(boom);
+  });
+
+  it('upload rejects a payload without a file with 400', async () => {
+    await expect(controller.upload({} as never)).rejects.toBeInstanceOf(BadRequestException);
+    expect(service.upload).not.toHaveBeenCalled();
   });
 
   it('delete forwards the key and returns the service result', async () => {

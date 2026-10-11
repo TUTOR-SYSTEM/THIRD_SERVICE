@@ -1,6 +1,9 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-import type { CreateNotificationDto, GetNotificationsQueryDto } from '@packages/entities/notification';
+import type {
+  CreateNotificationDto,
+  GetNotificationsQueryDto,
+} from '@packages/entities/notification';
 import { NotificationService } from './notification.service';
 
 /**
@@ -28,17 +31,17 @@ export class NotificationRpcController {
   }
 
   @MessagePattern('notification.getById')
-  getById(@Payload() payload: { id: string }) {
-    return this.notificationService.findById(payload.id);
+  getById(@Payload() payload: { id: string; userId?: string }) {
+    return this.notificationService.findById(payload.id, payload.userId);
   }
 
   @MessagePattern('notification.markAsRead')
-  markAsRead(@Payload() payload: { id: string }) {
-    return this.notificationService.markAsRead(payload.id);
+  markAsRead(@Payload() payload: { id: string; userId?: string }) {
+    return this.notificationService.markAsRead(payload.id, payload.userId);
   }
 
   @MessagePattern('notification.delete')
-  del(@Payload() payload: { id: string }) {
-    return this.notificationService.delete(payload.id);
+  del(@Payload() payload: { id: string; userId?: string }) {
+    return this.notificationService.delete(payload.id, payload.userId);
   }
 }

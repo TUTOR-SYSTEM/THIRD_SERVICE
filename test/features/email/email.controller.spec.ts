@@ -12,13 +12,13 @@ describe('EmailController / EmailRpcController', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('marks the HTTP test endpoint as public so the JWT guard skips it', () => {
+  it('does not mark the HTTP test endpoint as public (it sends a real email)', () => {
     const reflector = new Reflector();
     const isPublic = reflector.get<boolean>(
       IS_PUBLIC_KEY,
       EmailController.prototype.testSendEmailController,
     );
-    expect(isPublic).toBe(true);
+    expect(isPublic).toBeUndefined();
   });
 
   it('HTTP GET /emails delegates to testSendEmailService and returns its result', async () => {

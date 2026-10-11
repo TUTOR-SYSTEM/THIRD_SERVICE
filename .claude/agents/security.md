@@ -36,11 +36,11 @@ Review the diff: `git diff`, `git diff --staged`, `git diff main...HEAD`. Priori
 services, the `uploads` file-handling path, and RabbitMQ RPC responders.
 
 ## What to check
-- **AuthZ**: routes not accidentally left `@Public()` that shouldn't be (today, `uploads`'
-  routes and `email`'s test route ARE intentionally `@Public()` — that's expected, not a
-  finding). `notification` has no per-row ownership model — verify a new endpoint doesn't
-  silently let one user read/modify another's notification if that's meant to be scoped by
-  `userId`/`senderId`.
+- **AuthZ**: routes not accidentally left `@Public()` that shouldn't be (today NO route
+  except health is `@Public()` — `uploads` and the `email` test route were made JWT-protected,
+  so a new `@Public()` there is a finding). `notification` id routes are scoped to the caller's
+  `userId`/`senderId` — verify a new endpoint keeps that scoping. Flag any reintroduced fallback
+  JWT secret (secrets must come from `resolveJwtAccessSecret`).
 - **File upload safety** (`uploads`): file type/size not validated before upload only relying on
   client-supplied `mimetype`; `sharp` processing of attacker-controlled image bytes (resource
   exhaustion); R2 object keys built from user input without the existing UUID-based naming
@@ -61,8 +61,9 @@ services, the `uploads` file-handling path, and RabbitMQ RPC responders.
   rather than forwarding a client-supplied value. `@UseFilters(RpcExceptionFilter)` only shapes
   error responses — it does not validate input.
 - **Data exposure**: `notification` responses don't leak `senderId`/`userId` across unrelated
-  users; upload `download`/`delete` routes are `@Public()` today — confirm any new caller of
-  them can't be tricked into fetching/deleting an arbitrary key it shouldn't have access to.
+  users; upload `download`/`delete` need a JWT over HTTP, but the RPC `upload.download|delete`
+  patterns still accept any key — confirm any new caller can't be tricked into fetching/deleting
+  an arbitrary key it shouldn't have access to.
 
 ## Output
 List findings ordered Critical → High → Medium → Low. If none found in the changed code, say

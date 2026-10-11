@@ -90,11 +90,13 @@ describe('LogGateway', () => {
       expect(verify).toHaveBeenCalledWith('t', { secret: 'legacy-secret' });
     });
 
-    it('falls back to the dev secret when no secret is configured', async () => {
+    it('refuses the connection (no built-in fallback secret) when no secret is configured', async () => {
       config = {};
       const { gateway } = build();
-      await gateway.handleConnection(client({ auth: { token: 't' } }) as never);
-      expect(verify).toHaveBeenCalledWith('t', { secret: 'dev-insecure-jwt-secret' });
+      const socket = client({ auth: { token: 't' } });
+      await gateway.handleConnection(socket as never);
+      expect(verify).not.toHaveBeenCalled();
+      expect(socket.disconnect).toHaveBeenCalled();
     });
 
     it.each([

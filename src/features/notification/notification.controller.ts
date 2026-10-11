@@ -80,8 +80,8 @@ export class NotificationController {
   @ApiOperation({ summary: 'Get notification detail' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @SwaggerResponse({ status: 200, description: 'Notification detail' })
-  async findById(@Param('id') id: string) {
-    return this.notificationService.findById(id);
+  async findById(@CurrentUser() user: JwtGuardUser, @Param('id') id: string) {
+    return this.notificationService.findById(id, user.id);
   }
 
   @Patch(':id/read')
@@ -89,8 +89,8 @@ export class NotificationController {
   @ApiOperation({ summary: 'Mark notification as read' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @SwaggerResponse({ status: 200, description: 'Marked as read' })
-  async markAsRead(@Param('id') id: string) {
-    return this.notificationService.markAsRead(id);
+  async markAsRead(@CurrentUser() user: JwtGuardUser, @Param('id') id: string) {
+    return this.notificationService.markAsRead(id, user.id);
   }
 
   @Patch('read-all')
@@ -109,7 +109,7 @@ export class NotificationController {
   @ApiOperation({ summary: 'Delete notification' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @SwaggerResponse({ status: 200, description: 'Notification deleted' })
-  async delete(@Param('id') id: string) {
-    return this.notificationService.delete(id);
+  async delete(@CurrentUser() user: JwtGuardUser, @Param('id') id: string) {
+    return this.notificationService.delete(id, user.id);
   }
 }

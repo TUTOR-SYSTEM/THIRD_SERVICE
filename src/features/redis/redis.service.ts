@@ -1,4 +1,10 @@
-import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis, type RedisOptions } from 'ioredis';
 
@@ -10,9 +16,15 @@ const connectionOptions = {
   enableOfflineQueue: true,
   /** Giảm MaxRetriesPerRequestError khi đang reconnect so với mặc định 3 */
   maxRetriesPerRequest: null,
+  /** Rejects a command (even one parked in the offline queue) after 5s so a dead Redis can't hang callers. */
+  commandTimeout: 5_000,
 } as const satisfies Pick<
   RedisOptions,
-  'lazyConnect' | 'connectTimeout' | 'enableOfflineQueue' | 'maxRetriesPerRequest'
+  | 'lazyConnect'
+  | 'connectTimeout'
+  | 'enableOfflineQueue'
+  | 'maxRetriesPerRequest'
+  | 'commandTimeout'
 >;
 
 @Injectable()
@@ -82,15 +94,29 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async get(key: string): Promise<string | null> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
     return await this.client.get(key);
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
-    if (ttlSeconds !== undefined && ttlSeconds > 0) {
-      await this.client.set(key, value, 'EX', ttlSeconds);
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    if (typeof value !== 'string') {
+      throw new BadRequestException('value must be a string');
+    }
+    if (ttlSeconds === undefined || ttlSeconds === null) {
+      await this.client.set(key, value);
       return;
     }
-    await this.client.set(key, value);
+    // A bad TTL (0, negative, "300") used to fall through to a key that never expires —
+    // dangerous for session / reset-password tokens.
+    if (typeof ttlSeconds !== 'number' || !Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
+      throw new BadRequestException('ttlSeconds must be a positive number');
+    }
+    await this.client.set(key, value, 'EX', Math.ceil(ttlSeconds));
   }
 
   async del(...keys: string[]): Promise<number> {

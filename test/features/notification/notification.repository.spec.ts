@@ -3,7 +3,16 @@ import { NotificationRepository } from 'src/features/notification/notification.r
 /** Thenable drizzle-style query builder: every step returns itself, awaiting resolves `result`. */
 const chain = (result: unknown) => {
   const c: Record<string, unknown> = {};
-  for (const step of ['from', 'where', 'orderBy', 'limit', 'offset', 'set', 'values', 'returning']) {
+  for (const step of [
+    'from',
+    'where',
+    'orderBy',
+    'limit',
+    'offset',
+    'set',
+    'values',
+    'returning',
+  ]) {
     c[step] = jest.fn(() => c);
   }
   c.then = (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
@@ -134,12 +143,12 @@ describe('NotificationRepository', () => {
       await expect(repo.markAsRead('none')).resolves.toBeNull();
     });
 
-    it('markAllAsRead resolves with the raw driver result', async () => {
-      const c = chain({ count: 4 });
+    it('markAllAsRead resolves with { markedAll, count } (matches API_ENDPOINTS.md)', async () => {
+      const c = chain([{ id: 'a' }, { id: 'b' }]);
       db.update.mockReturnValueOnce({ set: c.set });
       c.set.mockReturnValue(c);
 
-      await expect(repo.markAllAsRead('u')).resolves.toEqual({ count: 4 });
+      await expect(repo.markAllAsRead('u')).resolves.toEqual({ markedAll: true, count: 2 });
     });
 
     it('delete reports true only when a row came back', async () => {
@@ -152,7 +161,8 @@ describe('NotificationRepository', () => {
 });
 
 describe('NotificationRepository.findAll filter matrix', () => {
-  const { PgDialect } = jest.requireActual<typeof import('drizzle-orm/pg-core')>('drizzle-orm/pg-core');
+  const { PgDialect } =
+    jest.requireActual<typeof import('drizzle-orm/pg-core')>('drizzle-orm/pg-core');
   const dialect = new PgDialect();
   const render = (fragment: unknown) => dialect.sqlToQuery(fragment as never);
 
@@ -160,8 +170,15 @@ describe('NotificationRepository.findAll filter matrix', () => {
     const countChain = chain([{ total: '0' }]);
     const rowsChain = chain([]);
     const db = { select: jest.fn().mockReturnValueOnce(countChain).mockReturnValueOnce(rowsChain) };
-    await new NotificationRepository(db as never).findAll('user-1', { page: 1, limit: 20, ...query } as never);
-    return { where: render(countChain.where.mock.calls[0][0]), rowsWhere: render(rowsChain.where.mock.calls[0][0]) };
+    await new NotificationRepository(db as never).findAll('user-1', {
+      page: 1,
+      limit: 20,
+      ...query,
+    } as never);
+    return {
+      where: render(countChain.where.mock.calls[0][0]),
+      rowsWhere: render(rowsChain.where.mock.calls[0][0]),
+    };
   };
 
   it('always scopes to the caller as recipient or sender', async () => {
