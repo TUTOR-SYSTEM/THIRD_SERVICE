@@ -42,7 +42,7 @@ responders on `third_queue`).
 ```bash
 bun run test              # Jest unit tests
 bun run test:watch        # Watch mode
-bun run test:cov          # Coverage (c8)
+bun run test:cov          # Coverage (Jest, v8 provider)
 bun run test:e2e          # E2E (Jest config at test/jest-e2e.json)
 bun run test:debug        # Debug with inspect
 ```
@@ -61,11 +61,24 @@ bun run test:debug        # Debug with inspect
 ## Writing E2E Tests
 
 - Create `*.e2e-spec.ts` files in `test/`, Jest + Supertest, full request/response cycle.
-- Currently limited to health endpoint tests.
+- Existing E2E: `test/test-scenario.e2e-spec.ts` (`testscenario.run` against a local fake-gateway
+  HTTP server). Config: `test/jest-e2e.json`.
+
+## Known bugs
+
+- A bug confirmed by a test is recorded with `it.failing(...)` (Jest 29), not a plain `it`, so the
+  suite stays green while the bug exists. The test body must assert the *correct* behaviour; it
+  turns red when the bug is fixed, which is the signal to switch it back to `it`.
+- Leave a `// BUG (expected to fail): ...` or `// SECURITY (expected to fail): ...` comment above it.
 
 ## Coverage
 
-- Provider: `c8`. Directories: `src/`. Run `bun run test:cov`.
+- Provider: Jest's `v8` (`coverageProvider` in `jest.config.js`). Run `bun run test:cov`.
+- The default report only covers the files a test loads (`roots: ['<rootDir>/test']`), so it looks
+  complete. Current baseline: 100% statements/lines/branches over those files (584 tests, 53 suites).
+- Measure the honest figure across all of `src/` with
+  `npx jest --coverage --roots='<rootDir>/test' --roots='<rootDir>/src'`: ~56.8% lines, ~91% branches.
+  Controllers, modules, `main.ts` and `app.module.ts` are the main gap.
 
 ## Before finishing
 

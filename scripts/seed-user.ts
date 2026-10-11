@@ -35,6 +35,14 @@ const SEED_ACCOUNTS = [
     role: 'ADMIN' as const,
   },
   {
+    email: 'tutor@finance.dev',
+    username: 'tutor',
+    firstName: 'Tutor',
+    lastName: 'Account',
+    password: 'Tutor@123456',
+    role: 'TUTOR' as const,
+  },
+  {
     email: 'student@finance.dev',
     username: 'student',
     firstName: 'Student',
@@ -59,7 +67,7 @@ const SEED_ACCOUNTS = [
   lastName: string;
   password: string;
   userCode?: string;
-  role: 'ADMIN' | 'STUDENT' | 'PARENT';
+  role: 'ADMIN' | 'TUTOR' | 'STUDENT' | 'PARENT';
 }>;
 
 async function main(): Promise<void> {

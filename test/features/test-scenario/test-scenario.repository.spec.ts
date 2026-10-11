@@ -1,6 +1,6 @@
 import { PgDialect } from 'drizzle-orm/pg-core';
 import type { SQL } from 'drizzle-orm';
-import { TestScenarioRepository } from './test-scenario.repository';
+import { TestScenarioRepository } from 'src/features/test-scenario/test-scenario.repository';
 
 /** Chainable + awaitable stand-in for a drizzle select builder. `selectDistinctOn` returns a
  * subquery-able builder (`.as()`), the main `select` resolves to `rows`. */
@@ -133,5 +133,115 @@ describe('TestScenarioRepository.findAll flow', () => {
     const result = await new TestScenarioRepository(db as never).findAll({});
     expect(db.select).toHaveBeenCalledTimes(1);
     expect(result[0].flow).toEqual([]);
+  });
+});
+
+/** Builder stand-in for CRUD methods: records calls and resolves to `rows` at the end. */
+function crudDb(rows: unknown[]) {
+  const calls: Record<string, unknown[]> = {};
+  const chain: Record<string, unknown> = {
+    then: (resolve: (v: unknown[]) => unknown) => resolve(rows),
+  };
+  for (const method of ['from', 'where', 'orderBy', 'limit', 'values', 'returning', 'set']) {
+    chain[method] = (...args: unknown[]) => {
+      calls[method] = args;
+      return chain;
+    };
+  }
+  const db = {
+    select: jest.fn((fields: unknown) => ((calls.select = [fields]), chain)),
+    insert: jest.fn((table: unknown) => ((calls.insert = [table]), chain)),
+    update: jest.fn((table: unknown) => ((calls.update = [table]), chain)),
+    delete: jest.fn((table: unknown) => ((calls.delete = [table]), chain)),
+  };
+  return { db, calls };
+}
+
+describe('TestScenarioRepository CRUD', () => {
+  it('create inserts the dto and returns the stored row', async () => {
+    const dto = { method: 'GET', path: '/x', expectedStatus: 200 };
+    const { db, calls } = crudDb([{ id: 's', ...dto }]);
+    await expect(new TestScenarioRepository(db as never).create(dto as never)).resolves.toEqual({ id: 's', ...dto });
+    expect(calls.values).toEqual([dto]);
+  });
+
+  it('createMany short-circuits on an empty batch without touching the database', async () => {
+    const { db } = crudDb([]);
+    await expect(new TestScenarioRepository(db as never).createMany([])).resolves.toEqual([]);
+    expect(db.insert).not.toHaveBeenCalled();
+  });
+
+  it('createMany inserts the whole batch in one statement', async () => {
+    const batch = [{ path: '/a' }, { path: '/b' }];
+    const { db, calls } = crudDb(batch);
+    await expect(new TestScenarioRepository(db as never).createMany(batch as never)).resolves.toEqual(batch);
+    expect(db.insert).toHaveBeenCalledTimes(1);
+    expect(calls.values).toEqual([batch]);
+  });
+
+  it('existingKeys builds a set of "METHOD path name" keys', async () => {
+    const { db } = crudDb([
+      { method: 'GET', path: '/classes', name: 'list' },
+      { method: 'GET', path: '/classes', name: 'list' },
+      { method: 'POST', path: '/classes', name: 'create' },
+    ]);
+    const keys = await new TestScenarioRepository(db as never).existingKeys();
+    expect(keys.size).toBe(2);
+    expect([...keys]).toEqual(
+      expect.arrayContaining([expect.stringContaining('GET'), expect.stringContaining('POST')]),
+    );
+  });
+
+  it('existingKeys is empty when no scenario exists', async () => {
+    const { db } = crudDb([]);
+    await expect(new TestScenarioRepository(db as never).existingKeys()).resolves.toEqual(new Set());
+  });
+
+  it('findById returns the first row or null', async () => {
+    const found = crudDb([{ id: 's1' }]);
+    await expect(new TestScenarioRepository(found.db as never).findById('s1')).resolves.toEqual({ id: 's1' });
+
+    const missing = crudDb([]);
+    await expect(new TestScenarioRepository(missing.db as never).findById('nope')).resolves.toBeNull();
+  });
+
+  it('update sets the patch on the matching row and returns it, or null when absent', async () => {
+    const hit = crudDb([{ id: 's1', name: 'new' }]);
+    await expect(new TestScenarioRepository(hit.db as never).update('s1', { name: 'new' } as never)).resolves.toEqual({
+      id: 's1',
+      name: 'new',
+    });
+    expect(hit.calls.set).toEqual([{ name: 'new' }]);
+
+    const miss = crudDb([]);
+    await expect(new TestScenarioRepository(miss.db as never).update('x', {} as never)).resolves.toBeNull();
+  });
+
+  it('delete returns the removed row or null', async () => {
+    const hit = crudDb([{ id: 's1' }]);
+    await expect(new TestScenarioRepository(hit.db as never).delete('s1')).resolves.toEqual({ id: 's1' });
+
+    const miss = crudDb([]);
+    await expect(new TestScenarioRepository(miss.db as never).delete('x')).resolves.toBeNull();
+  });
+
+  it('findRuns returns the newest runs for one scenario, limited', async () => {
+    const { db, calls } = crudDb([{ id: 'r2' }, { id: 'r1' }]);
+    await expect(new TestScenarioRepository(db as never).findRuns('s1', 5)).resolves.toEqual([
+      { id: 'r2' },
+      { id: 'r1' },
+    ]);
+    expect(calls.limit).toEqual([5]);
+    expect(calls.orderBy).toHaveLength(1);
+  });
+
+  it('createRun inserts a run row and returns it', async () => {
+    const data = { scenarioId: 's1', correlationId: 'c', passed: true };
+    const { db, calls } = crudDb([{ id: 'r', ...data }]);
+    await expect(new TestScenarioRepository(db as never).createRun(data as never)).resolves.toEqual({
+      id: 'r',
+      ...data,
+    });
+    expect(calls.values).toEqual([data]);
   });
 });

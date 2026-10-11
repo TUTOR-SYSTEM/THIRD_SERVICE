@@ -72,6 +72,16 @@ export const testScenarioCategoryEnum = pgEnum('test_scenario_category', [
   'not_found',
   'domain',
 ]);
+// Whose token a test scenario runs with: the admin pressing "Test" (`caller`), a fixed test account
+// per role (logged in by third-service from `TEST_ACCOUNT_<ROLE>`), or no token at all.
+export const testAuthProfileEnum = pgEnum('test_auth_profile', [
+  'caller',
+  'admin',
+  'tutor',
+  'student',
+  'parent',
+  'none',
+]);
 
 // ─── USER: users, grades ────────────────────────────────────────────
 export const users = pgTable('users', {
@@ -494,7 +504,10 @@ export const testScenarios = pgTable(
     // { headers?: Record<string,string>, body?: unknown } — header values may use `{{accessToken}}`.
     requestTemplate: jsonb('request_template').$type<Record<string, unknown>>().notNull().default({}),
     expectedStatus: integer('expected_status').notNull(),
+    // Substring the response `message` must contain (case-insensitive). Null = not yet captured: the run fails.
+    expectedMessage: text('expected_message'),
     category: testScenarioCategoryEnum('category').notNull().default('valid'),
+    authProfile: testAuthProfileEnum('auth_profile').notNull().default('caller'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at')
       .defaultNow()
@@ -517,6 +530,10 @@ export const testRuns = pgTable(
     passed: boolean('passed').notNull(),
     durationMs: integer('duration_ms').notNull(),
     errorMessage: text('error_message'),
+    // Response body as received (secrets redacted, truncated) — shown when a case fails.
+    responseBody: text('response_body'),
+    // Path actually requested, after `{{variables}}` were filled in.
+    requestPath: text('request_path'),
     triggeredBy: uuid('triggered_by'),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
@@ -525,3 +542,20 @@ export const testRuns = pgTable(
     index('test_runs_correlation_id_idx').on(table.correlationId),
   ],
 );
+
+// Named values a scenario references as `{{fixture.<key>}}` (e.g. a real class id for
+// `/classes/{{fixture.classId}}`). Either a fixed `value`, or a `resolver` request whose JSON response
+// the value is extracted from — then `value` caches the last resolution.
+export const testFixtures = pgTable('test_fixtures', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  key: varchar('key', { length: 100 }).notNull().unique(),
+  description: text('description'),
+  value: text('value'),
+  // { method: 'GET', path: string, authProfile: string, extract: 'data.classes.0.id' }
+  resolver: jsonb('resolver').$type<Record<string, unknown>>(),
+  resolvedAt: timestamp('resolved_at'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at')
+    .defaultNow()
+    .$onUpdate(() => new Date()),
+});

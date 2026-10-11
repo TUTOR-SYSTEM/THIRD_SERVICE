@@ -189,6 +189,12 @@ export const ERROR_TRANSLATIONS = {
 
   // Test scenario
   TEST_SCENARIO_NOT_FOUND: { vi: 'Không tìm thấy kịch bản test', en: 'Test scenario not found' },
+  TEST_FIXTURE_NOT_FOUND: { vi: 'Không tìm thấy fixture', en: 'Test fixture not found' },
+  TEST_FIXTURE_KEY_TAKEN: { vi: 'Key fixture đã tồn tại', en: 'Test fixture key already exists' },
+  TEST_FIXTURE_RESOLVE_FAILED: {
+    vi: 'Không lấy được giá trị fixture',
+    en: 'Could not resolve the test fixture',
+  },
 
   // Tuition
   TUITION_RECORD_NOT_FOUND: { vi: 'Không tìm thấy hồ sơ học phí', en: 'Tuition record not found' },

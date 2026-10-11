@@ -44,13 +44,22 @@ third-service owns or should query that data. Concretely:
 `drizzle/` already has 5 generated migrations reflecting this full schema — that's expected
 given the above; it doesn't mean this repo runs code against all of it.
 
-## Schema import gotcha (2026-09-29)
+## Schema import gotcha (2026-09-29, updated 2026-10-10)
 
-`src/database/database.module.ts` imports the shared schema with `import * as schema from
-'@tutor/gateway/schema'`. Because of `esModuleInterop`, that namespace gets an extra `default`
+**Never import `@tutor/gateway/schema` (or any other `@tutor/*` package) from `src/`.** That path
+only resolves in a local dev checkout that has the sibling `gateway` repo linked; the Docker build
+(`COPY src ./src` into a builder with no sibling repo) fails with `TS2307: Cannot find module
+'@tutor/gateway/schema'`. Every feature imports tables from the local mirror instead, e.g.
+`import { testScenarios } from '../../database/schema'`. Keep the mirror in sync with gateway by
+hand (commit "Sync local schema mirror with gateway develop"), not by importing gateway's file.
+
+`src/database/database.module.ts` imports the local mirror with `import * as schema from
+'./schema'`. Because of `esModuleInterop`, that namespace gets an extra `default`
 key holding a null-prototype ESM namespace, and drizzle's `is()` crashes on it
 (`Cannot read properties of null (reading 'constructor')`, logged misleadingly as "PostgreSQL
 connect failed"). The module therefore strips `default` (`const { default: _default, ...tables }
 = schema`) and passes `{ schema: tables }` to `drizzle()`. Keep that when touching the provider
 (same fix lives in `user` and `tutor-service`). `request_logs` also gained `ip` and
 `error_message` columns in gateway's schema — apply with `db:push` from gateway.
+`test_scenarios`/`test_runs`/`test_fixtures` (used by `src/features/test-scenario/`) live in the
+same mirror.

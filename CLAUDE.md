@@ -132,7 +132,7 @@ src/
 │   ├── redis/                    # Redis service wrapper (ioredis); also has redis.rpc.controller.ts
 │   │                              # (@MessagePattern('redis.*') mirror)
 │   ├── test-scenario/            # Admin-managed test cases per gateway endpoint + the engine that
-│   │                              # runs them: `testscenario.create|list|update|delete|stats|run`
+│   │                              # runs them: `testscenario.create|list|update|delete|stats|run|runs|authprofiles|fixtures.*`
 │   │                              # (`test-scenario.rpc.controller.ts` only — no HTTP controller;
 │   │                              # gateway's thin `/test-scenarios` proxy reaches it). `run` fires a
 │   │                              # REAL request at `GATEWAY_BASE_URL` with a fresh `x-correlation-id`
@@ -140,7 +140,14 @@ src/
 │   │                              # a `test_runs` row (pass ⇔ actualStatus === expectedStatus).
 │   │                              # `wait: false` (gateway `?async=true`) returns `{ correlationId }`
 │   │                              # at once and records the run in the background. Tables
-│   │                              # `test_scenarios`/`test_runs` live in gateway's `schema.ts`.
+│   │                              # `test_scenarios`/`test_runs`/`test_fixtures` live in gateway's
+│   │                              # `schema.ts`. Before firing, `buildRequest` fills `{{variables}}`
+│   │                              # (test-template.ts): `accessToken` (the scenario's `authProfile`
+│   │                              # token), `token.<role>`, `fixture.<key>` (test-fixture.service.ts,
+│   │                              # fixed value or resolved via a gateway GET + dot path, cached on
+│   │                              # the row), `uuid`/`unknownUuid`/`timestamp`/`random.*`. Role
+│   │                              # tokens come from test-auth.service.ts (`TEST_ACCOUNT_<ROLE>`).
+│   │                              # A variable that can't be filled = failed run, nothing sent.
 │   └── log/                      # Owns `request_logs` (centralized cross-service request logging —
 │                                  # see gateway's `LogController` for the admin-facing read API).
 │                                  # log.controller.ts (HTTP, admin) + log.rpc.controller.ts
@@ -220,6 +227,7 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `RABBITMQ_URL`                            | RabbitMQ connection — required at boot (local `amqp://admin:admin@localhost:5672`; Railway: RabbitMQ service private URL) |
 | `THIRD_QUEUE`                             | Overrides the RMQ listener queue name (default `third_queue`) |
 | `GATEWAY_BASE_URL`                        | Where `testscenario.run` fires its real requests (default `http://localhost:8888`) |
+| `TEST_ACCOUNT_ADMIN` / `TEST_ACCOUNT_TUTOR` / `TEST_ACCOUNT_STUDENT` / `TEST_ACCOUNT_PARENT` | `email:password` of the per-role test accounts a scenario's `authProfile` runs as (logged in through the gateway, tokens cached in memory). Unset → runs with that profile fail with "not configured". `scripts/seed-user.ts` creates one account per role locally |
 | `RESEND_API_KEY`                          | Required — `EmailService` throws at construction if missing |
 | `MAIL_FROM`                               | Required — sender address for Resend        |
 | `PASSWORD_RESET_URL_BASE`                 | Base URL used in the forgot-password email link (default `http://localhost:3000`) |

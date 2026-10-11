@@ -1,10 +1,15 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import type {
+  CreateTestFixtureDto,
   CreateTestScenarioDto,
+  GenerateScenariosDto,
   GetTestScenariosQueryDto,
+  UpdateTestFixtureDto,
   UpdateTestScenarioDto,
 } from '@packages/entities/test-scenario';
+import { TestAuthService } from './test-auth.service';
+import { TestFixtureService } from './test-fixture.service';
 import { TestScenarioService } from './test-scenario.service';
 
 /**
@@ -13,7 +18,11 @@ import { TestScenarioService } from './test-scenario.service';
  */
 @Controller()
 export class TestScenarioRpcController {
-  constructor(private readonly service: TestScenarioService) {}
+  constructor(
+    private readonly service: TestScenarioService,
+    private readonly fixtures: TestFixtureService,
+    private readonly auth: TestAuthService,
+  ) {}
 
   @MessagePattern('testscenario.create')
   create(@Payload() dto: CreateTestScenarioDto) {
@@ -40,6 +49,11 @@ export class TestScenarioRpcController {
     return this.service.stats();
   }
 
+  @MessagePattern('testscenario.runs')
+  runs(@Payload() payload: { id: string; limit?: number }) {
+    return this.service.findRuns(payload.id, payload.limit);
+  }
+
   @MessagePattern('testscenario.run')
   run(
     @Payload() payload: { id: string; userId?: string; accessToken?: string; wait?: boolean },
@@ -49,5 +63,45 @@ export class TestScenarioRpcController {
       { userId: payload.userId, accessToken: payload.accessToken },
       { wait: payload.wait },
     );
+  }
+
+  @MessagePattern('testscenario.generate')
+  generate(@Payload() dto: GenerateScenariosDto) {
+    return this.service.generate(dto);
+  }
+
+  @MessagePattern('testscenario.createMany')
+  createMany(@Payload() payload: { scenarios: CreateTestScenarioDto[] }) {
+    return this.service.createMany(payload.scenarios);
+  }
+
+  @MessagePattern('testscenario.authprofiles')
+  authProfiles() {
+    return this.auth.statuses();
+  }
+
+  @MessagePattern('testscenario.fixtures.list')
+  listFixtures() {
+    return this.fixtures.findAll();
+  }
+
+  @MessagePattern('testscenario.fixtures.create')
+  createFixture(@Payload() dto: CreateTestFixtureDto) {
+    return this.fixtures.create(dto);
+  }
+
+  @MessagePattern('testscenario.fixtures.update')
+  updateFixture(@Payload() payload: { id: string; dto: UpdateTestFixtureDto }) {
+    return this.fixtures.update(payload.id, payload.dto);
+  }
+
+  @MessagePattern('testscenario.fixtures.delete')
+  deleteFixture(@Payload() payload: { id: string }) {
+    return this.fixtures.delete(payload.id);
+  }
+
+  @MessagePattern('testscenario.fixtures.resolve')
+  resolveFixture(@Payload() payload: { id: string; accessToken?: string }) {
+    return this.fixtures.resolve(payload.id, payload.accessToken);
   }
 }
