@@ -37,7 +37,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
           .map((part) => translateMessage(ERROR_TRANSLATIONS, part, lang))
           .join(', ');
       } else {
-        message = (res as { message: string }).message || message;
+        message = (res as { message: string }).message || exception.message || message;
       }
     }
 

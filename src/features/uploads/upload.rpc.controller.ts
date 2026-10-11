@@ -44,7 +44,7 @@ export class UploadRpcController {
       content: Buffer.concat(chunks),
       contentType,
       contentLength,
-      filename: payload.key.split('/').pop() ?? 'download',
+      filename: payload.key.split('/').pop() as string,
     };
   }
 

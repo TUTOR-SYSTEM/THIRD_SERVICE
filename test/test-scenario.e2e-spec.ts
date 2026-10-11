@@ -5,6 +5,9 @@ import { PATTERN_METADATA } from '@nestjs/microservices/constants';
 import { TestScenarioRpcController } from '../src/features/test-scenario/test-scenario.rpc.controller';
 import { TestScenarioService } from '../src/features/test-scenario/test-scenario.service';
 import { TestScenarioRepository } from '../src/features/test-scenario/test-scenario.repository';
+import { TestAuthService } from '../src/features/test-scenario/test-auth.service';
+import { TestFixtureService } from '../src/features/test-scenario/test-fixture.service';
+import { TestFixtureRepository } from '../src/features/test-scenario/test-fixture.repository';
 
 /**
  * Drives `testscenario.run` end to end: real controller + service, a real HTTP server standing in
@@ -31,16 +34,40 @@ describe('testscenario.run (e2e)', () => {
     },
   };
 
+  const fixtures = new Map<string, Record<string, unknown>>();
+  const fixtureRepo = {
+    findByKey: async (key: string) => fixtures.get(key) ?? null,
+    update: async (id: string, data: Record<string, unknown>) => {
+      const row = [...fixtures.values()].find((f) => f.id === id)!;
+      Object.assign(row, data);
+      return row;
+    },
+  };
+
   let controller: TestScenarioRpcController;
   const run = (payload: Parameters<TestScenarioRpcController['run']>[0]) =>
     controller.run(payload) as Promise<Record<string, unknown>>;
 
   beforeAll(async () => {
-    // Fake gateway: 401 without an Authorization header, 422 on an empty JSON body, else 200.
+    // Fake gateway: logs the student test account in, lists one class, otherwise answers 401
+    // without an Authorization header, 422 on an empty JSON body, else 200.
     gateway = createServer((req, res) => {
       let body = '';
       req.on('data', (chunk) => (body += chunk));
       req.on('end', () => {
+        if (req.url === '/auth/login') {
+          const ok = body === JSON.stringify({ email: 'student@x.dev', password: 'secret' });
+          res
+            .writeHead(ok ? 200 : 400, { 'content-type': 'application/json' })
+            .end(JSON.stringify(ok ? { data: { accessToken: 'student-jwt' } } : {}));
+          return;
+        }
+        if (req.url === '/classes?limit=1') {
+          res
+            .writeHead(200, { 'content-type': 'application/json' })
+            .end(JSON.stringify({ data: { classes: [{ id: 'class-7' }] } }));
+          return;
+        }
         received.push({ method: req.method, url: req.url, headers: req.headers, body });
         const status = !req.headers.authorization ? 401 : body === '{}' ? 422 : 200;
         res.writeHead(status, { 'content-type': 'application/json' }).end('{}');
@@ -48,16 +75,24 @@ describe('testscenario.run (e2e)', () => {
     });
     await new Promise<void>((resolve) => gateway.listen(0, '127.0.0.1', resolve));
     process.env.GATEWAY_BASE_URL = `http://127.0.0.1:${(gateway.address() as AddressInfo).port}`;
+    process.env.TEST_ACCOUNT_STUDENT = 'student@x.dev:secret';
 
     const moduleRef = await Test.createTestingModule({
       controllers: [TestScenarioRpcController],
-      providers: [TestScenarioService, { provide: TestScenarioRepository, useValue: repo }],
+      providers: [
+        TestScenarioService,
+        TestAuthService,
+        TestFixtureService,
+        { provide: TestScenarioRepository, useValue: repo },
+        { provide: TestFixtureRepository, useValue: fixtureRepo },
+      ],
     }).compile();
     controller = moduleRef.get(TestScenarioRpcController);
   });
 
   afterAll(async () => {
     delete process.env.GATEWAY_BASE_URL;
+    delete process.env.TEST_ACCOUNT_STUDENT;
     await new Promise((resolve) => gateway.close(resolve));
   });
 
@@ -65,6 +100,7 @@ describe('testscenario.run (e2e)', () => {
     received.length = 0;
     runs.length = 0;
     scenarios.clear();
+    fixtures.clear();
     const authed = { authorization: 'Bearer {{accessToken}}' };
     scenarios.set('me-ok', {
       id: 'me-ok',
@@ -118,6 +154,42 @@ describe('testscenario.run (e2e)', () => {
 
     const wrong = await run({ id: 'me-no-token', accessToken: 'tok' });
     expect(wrong).toMatchObject({ actualStatus: 200, expectedStatus: 401, passed: false });
+  });
+
+  it('logs the student test account in and runs a role case with its token', async () => {
+    scenarios.set('student-admin-route', {
+      id: 'student-admin-route',
+      method: 'GET',
+      path: '/admin/users',
+      expectedStatus: 200,
+      category: 'auth',
+      authProfile: 'student',
+      requestTemplate: {},
+    });
+    const result = await run({ id: 'student-admin-route', accessToken: 'admin-tok' });
+    expect(received[0].headers.authorization).toBe('Bearer student-jwt');
+    expect(result).toMatchObject({ passed: true });
+  });
+
+  it('resolves a fixture through the gateway and fills it into the path', async () => {
+    fixtures.set('classId', {
+      id: 'f1',
+      key: 'classId',
+      value: null,
+      resolver: { method: 'GET', path: '/classes?limit=1', authProfile: 'caller', extract: 'data.classes.0.id' },
+    });
+    scenarios.set('class-detail', {
+      id: 'class-detail',
+      method: 'GET',
+      path: '/classes/{{fixture.classId}}',
+      expectedStatus: 200,
+      requestTemplate: {},
+    });
+    const result = await run({ id: 'class-detail', accessToken: 'tok' });
+
+    expect(received[0].url).toBe('/classes/class-7');
+    expect(result).toMatchObject({ passed: true, requestPath: '/classes/class-7' });
+    expect(fixtures.get('classId')).toMatchObject({ value: 'class-7' });
   });
 
   it('sends a JSON body for write methods', async () => {

@@ -92,7 +92,7 @@ export class UploadController {
     if (!key) throw new BadRequestException('key query param is required');
     try {
       const { stream, contentType, contentLength } = await this.uploadService.download(key);
-      const filename = key.split('/').pop() ?? 'download';
+      const filename = key.split('/').pop() as string;
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       if (contentLength !== undefined) res.setHeader('Content-Length', contentLength);
