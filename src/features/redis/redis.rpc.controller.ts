@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { BadRequestException, Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { RedisService } from './redis.service';
 
@@ -16,6 +16,12 @@ export class RedisRpcController {
     return this.redisService.get(payload.key);
   }
 
+  // Existence only (never the value) — used by the gateway's session check.
+  @MessagePattern('redis.exists')
+  exists(@Payload() payload: { key: string }) {
+    return this.redisService.exists(payload.key);
+  }
+
   // Request-reply so callers can wait for the write to land (e.g. the reset-password token must
   // exist before the email goes out). The reply must be non-undefined or the RMQ client
   // completes empty and `RmqProducer.send()` treats it as a failure.
@@ -27,6 +33,9 @@ export class RedisRpcController {
 
   @EventPattern('redis.del')
   del(@Payload() payload: { keys: string[] }) {
+    if (!Array.isArray(payload?.keys) || payload.keys.some((k) => typeof k !== 'string' || !k)) {
+      throw new BadRequestException('keys must be an array of non-empty strings');
+    }
     return this.redisService.del(...payload.keys);
   }
 }

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 import { SendMailOptions } from '@packages/interfaces';
@@ -23,8 +23,16 @@ export class EmailService {
   }
 
   async testSendEmailService() {
+    const to =
+      this.configService.get<string>('TEST_EMAIL_RECIPIENT') || process.env.TEST_EMAIL_RECIPIENT;
+    if (!to) {
+      throw new HttpException(
+        'TEST_EMAIL_RECIPIENT is not configured',
+        HttpStatus.SERVICE_UNAVAILABLE,
+      );
+    }
     return this.sendMail({
-      to: 'dang04223@gmail.com',
+      to,
       subject: 'test email sended ...',
       html: '',
       text: 'test email sended ...',

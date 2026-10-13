@@ -1,6 +1,6 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { Readable, Writable } from 'stream';
+import { PassThrough, Readable, Writable } from 'stream';
 import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
 import { UploadController } from 'src/features/uploads/upload.controller';
 import { UploadService } from 'src/features/uploads/upload.service';
@@ -15,6 +15,16 @@ const fakeRes = (): FakeRes => {
   res.setHeader = jest.fn((name: string, value: unknown) => {
     headers[name] = value;
   });
+  return res;
+};
+
+const realRes = () => {
+  const res: any = new PassThrough();
+  res.headers = {} as Record<string, unknown>;
+  res.setHeader = jest.fn((n: string, v: unknown) => {
+    res.headers[n] = v;
+  });
+  res.resume();
   return res;
 };
 
@@ -73,20 +83,17 @@ describe('UploadController (HTTP)', () => {
   });
 
   it('download streams the object with Content-Type, Content-Disposition and Content-Length', async () => {
-    service.download.mockResolvedValue({
-      stream: Readable.from([Buffer.from('data')]),
-      contentType: 'image/jpeg',
-      contentLength: 9,
-    });
-    const res = fakeRes();
-    const finished = new Promise((resolve) => res.on('finish', resolve));
+    const stream = Readable.from([Buffer.from('imgdata9')]);
+    service.download.mockResolvedValue({ stream, contentType: 'image/jpeg', contentLength: 9 });
+    const res = realRes();
 
     await controller.download('uploads/photo.jpg', res as never);
-    await finished;
+    await new Promise((r) => setTimeout(r, 10));
 
     expect(res.headers).toEqual({
       'Content-Type': 'image/jpeg',
       'Content-Disposition': 'attachment; filename="photo.jpg"',
+      'X-Content-Type-Options': 'nosniff',
       'Content-Length': 9,
     });
   });
@@ -101,11 +108,12 @@ describe('UploadController (HTTP)', () => {
   });
 
   it('download omits Content-Length when R2 does not report it', async () => {
-    const stream = Readable.from([]);
+    const stream = Readable.from([Buffer.from('x')]);
     service.download.mockResolvedValue({ stream, contentType: 'application/pdf' });
-    const res = fakeRes();
+    const res = realRes();
 
-    await controller.download('k.pdf', res as never);
+    await controller.download('uploads/k.pdf', res as never);
+    await new Promise((r) => setTimeout(r, 10));
 
     expect(res.headers).not.toHaveProperty('Content-Length');
   });

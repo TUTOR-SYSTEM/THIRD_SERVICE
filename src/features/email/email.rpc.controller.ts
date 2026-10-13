@@ -1,6 +1,19 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
+import { z } from 'zod';
+import { ZodValidationPipe } from '@packages/pipes/zod-validation.pipe';
 import { EmailService } from './email.service';
+
+/**
+ * RPC payload for the reset-password mail. `resetToken` is the reset `jti` (a random UUID minted
+ * by `user`), and `to` must be a real address: without this, any publisher could make the
+ * configured `MAIL_FROM` send mail to an arbitrary recipient (TRD3-15).
+ */
+const forgotPasswordPayloadSchema = z.object({
+  to: z.email().max(254),
+  resetToken: z.uuid(),
+  displayName: z.string().max(200).nullish(),
+});
 
 /**
  * Message-pattern mirror of `EmailController` — reached by the gateway's/`user`'s
@@ -18,8 +31,13 @@ export class EmailRpcController {
 
   @MessagePattern('email.sendForgotPasswordMail')
   sendForgotPasswordMail(
-    @Payload() payload: { to: string; resetToken: string; displayName: string },
+    @Payload(new ZodValidationPipe(forgotPasswordPayloadSchema))
+    payload: z.infer<typeof forgotPasswordPayloadSchema>,
   ) {
-    return this.emailService.sendForgotPasswordMail(payload);
+    return this.emailService.sendForgotPasswordMail({
+      to: payload.to,
+      resetToken: payload.resetToken,
+      displayName: payload.displayName ?? '',
+    });
   }
 }

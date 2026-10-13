@@ -1,4 +1,12 @@
-import { ArgumentsHost, Catch, ExceptionFilter, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  HttpStatus,
+  Logger,
+} from '@nestjs/common';
+import { sanitizeLogMessage } from '../helpers/sanitize-log.helper';
 import { throwError } from 'rxjs';
 
 const SERVICE_NAME = 'third-service';
@@ -24,6 +32,8 @@ export interface RpcErrorPayload {
  */
 @Catch()
 export class RpcExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(RpcExceptionFilter.name);
+
   catch(exception: unknown, _host: ArgumentsHost) {
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
@@ -47,7 +57,12 @@ export class RpcExceptionFilter implements ExceptionFilter {
       );
     }
 
-    const message = exception instanceof Error ? exception.message : 'Internal server error';
+    // Never relay raw error text (may contain SQL / params) — log server-side only.
+    this.logger.error(
+      exception instanceof Error ? sanitizeLogMessage(exception.message) : String(exception),
+      exception instanceof Error ? exception.stack : undefined,
+    );
+    const message = 'Internal server error';
     return throwError(
       () =>
         ({

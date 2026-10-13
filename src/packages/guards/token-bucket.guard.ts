@@ -12,6 +12,7 @@ import type Redis from 'ioredis';
 import { RedisService } from '../../features/redis/redis.service';
 import { THROTTLE_KEY, type ThrottleOptions } from '@packages/decorators';
 
+const EVAL_TIMEOUT_MS = 500;
 const DEFAULT_THROTTLE: ThrottleOptions = { limit: 60, ttl: 60 };
 
 @Injectable()
@@ -41,7 +42,10 @@ export class TokenBucketGuard implements CanActivate {
 
     let bucket: number[];
     try {
-      bucket = await this.evalBucket(key, maxTokens, refillPerSecond, now);
+      bucket = await this.withTimeout(
+        this.evalBucket(key, maxTokens, refillPerSecond, now),
+        EVAL_TIMEOUT_MS,
+      );
     } catch (err) {
       // Redis unreachable / timed out: rate limiting is best-effort, don't take every route down with it.
       this.logger.warn(`Rate limiter unavailable, failing open: ${(err as Error).message}`);
@@ -70,6 +74,14 @@ export class TokenBucketGuard implements CanActivate {
     // limit or create unbounded Redis keys.
     const routePath = (request.route as { path?: string } | undefined)?.path ?? request.path;
     return `ratelimit:${identifier}:${request.method}:${routePath}`;
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    let timer: NodeJS.Timeout;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`redis eval timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
   }
 
   private async evalBucket(

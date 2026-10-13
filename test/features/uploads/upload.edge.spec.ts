@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { UploadController } from 'src/features/uploads/upload.controller';
@@ -25,10 +26,10 @@ describe('UploadService — key and mimetype edge cases', () => {
 
   beforeEach(() => send.mockClear());
 
-  it('stores a non-image without an extension under the .bin key suffix', async () => {
-    const res = await service.upload(file('README', 'application/octet-stream'));
-    expect(res.key).toMatch(/^uploads\/test-uuid\.bin$/);
-    expect(res.mimetype).toBe('application/octet-stream');
+  it('rejects a file without an extension (not whitelisted) with 400', async () => {
+    await expect(service.upload(file('README', 'application/octet-stream'))).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('keeps the original extension for non-images', async () => {

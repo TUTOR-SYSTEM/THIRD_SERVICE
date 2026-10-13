@@ -1,4 +1,3 @@
-import { BadGatewayException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client } from '@aws-sdk/client-s3';
 import { S3ClientProvider } from 'src/features/uploads/upload.provider';
@@ -30,10 +29,10 @@ describe('S3ClientProvider', () => {
     expect(client.config.forcePathStyle).toBe(true);
   });
 
-  it.each(Object.keys(full))('throws BadGatewayException when %s is missing', (missing) => {
+  it.each(Object.keys(full))('returns null (no throw) when %s is missing', (missing) => {
     const factory = (S3ClientProvider as { useFactory: (c: ConfigService) => S3Client }).useFactory;
     const values = { ...full, [missing]: undefined };
 
-    expect(() => factory(makeConfig(values))).toThrow(BadGatewayException);
+    expect(factory(makeConfig(values))).toBeNull();
   });
 });

@@ -3,6 +3,10 @@ import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
 import { requestLogs, testRuns, testScenarios } from '../../database/schema';
+import {
+  createTestScenarioSchema,
+  updateTestScenarioSchema,
+} from '@packages/entities/test-scenario';
 import type {
   CreateTestScenarioDto,
   GetTestScenariosQueryDto,
@@ -14,6 +18,15 @@ import type {
 /** Identity of a scenario for de-duplication: same method + path + name = same case. */
 export const scenarioKey = (s: { method: string; path: string; name: string }) =>
   `${s.method} ${s.path} ${s.name}`;
+
+const CREATE_KEYS = Object.keys(createTestScenarioSchema.shape);
+const UPDATE_KEYS = Object.keys(updateTestScenarioSchema.shape);
+const pick = <T extends object>(data: T, keys: string[]): T =>
+  Object.fromEntries(
+    Object.entries(data).filter(([k, v]) => keys.includes(k) && v !== undefined),
+  ) as T;
+const pickCreate = (data: CreateTestScenarioDto) => pick(data, CREATE_KEYS);
+const pickUpdate = (data: UpdateTestScenarioDto) => pick(data, UPDATE_KEYS);
 
 export type CreateTestRunData = {
   scenarioId: string;
@@ -36,7 +49,7 @@ export class TestScenarioRepository {
   ) {}
 
   async create(data: CreateTestScenarioDto) {
-    const [row] = await this.db.insert(testScenarios).values(data).returning();
+    const [row] = await this.db.insert(testScenarios).values(pickCreate(data)).returning();
     return row;
   }
 
@@ -124,7 +137,7 @@ export class TestScenarioRepository {
 
   async createMany(data: CreateTestScenarioDto[]) {
     if (data.length === 0) return [];
-    return this.db.insert(testScenarios).values(data).returning();
+    return this.db.insert(testScenarios).values(data.map(pickCreate)).returning();
   }
 
   async findById(id: string) {
@@ -135,7 +148,7 @@ export class TestScenarioRepository {
   async update(id: string, data: UpdateTestScenarioDto) {
     const [row] = await this.db
       .update(testScenarios)
-      .set(data)
+      .set(pickUpdate(data))
       .where(eq(testScenarios.id, id))
       .returning();
     return row ?? null;

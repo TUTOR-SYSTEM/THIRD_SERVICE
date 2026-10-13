@@ -2,7 +2,7 @@
 /**
  * Drop all tables + enums, recreate from schema, seed test users.
  *
- * Usage: bun scripts/recreate-db.ts
+ * Usage: bun scripts/recreate-db.ts --confirm-db=<database name>   (refused when NODE_ENV=production)
  */
 import 'dotenv/config';
 import postgres from 'postgres';
@@ -24,8 +24,39 @@ function resolveDatabaseUrl(): string {
   return url.toString();
 }
 
+/**
+ * Destructive guard: this script drops every table and enum in the target database, and
+ * DATABASE_URL usually points at the database shared by all four services. Refuse to run in
+ * production, and require the operator to type the target database name back as
+ * `--confirm-db=<name>` so a stale or wrong DATABASE_URL cannot wipe the wrong database.
+ * Never prints the URL itself (it contains the password).
+ */
+function assertSafeToRecreate(url: string): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Refusing to run: NODE_ENV=production');
+  }
+  let dbName: string;
+  try {
+    dbName = decodeURIComponent(new URL(url).pathname.replace(/^\//, ''));
+  } catch {
+    throw new Error('Refusing to run: cannot determine target database name');
+  }
+  if (!dbName) {
+    throw new Error('Refusing to run: target database name is empty');
+  }
+  const prefix = '--confirm-db=';
+  const confirmed = process.argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+  if (confirmed !== dbName) {
+    throw new Error(
+      `Refusing to run: this drops ALL tables in database "${dbName}". ` +
+        `Re-run with --confirm-db=${dbName} to proceed.`,
+    );
+  }
+}
+
 async function main(): Promise<void> {
   const url = resolveDatabaseUrl();
+  assertSafeToRecreate(url);
   const sql = postgres(url);
 
   console.log('Dropping all tables…');

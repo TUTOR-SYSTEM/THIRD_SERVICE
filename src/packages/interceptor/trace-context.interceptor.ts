@@ -1,6 +1,6 @@
 import { CallHandler, ExecutionContext, Injectable, Logger, NestInterceptor } from '@nestjs/common';
 import { RmqContext } from '@nestjs/microservices';
-import { Observable } from 'rxjs';
+import { Observable, type Subscription } from 'rxjs';
 import { randomUUID } from 'node:crypto';
 import {
   CORRELATION_ID_HEADER,
@@ -20,34 +20,78 @@ export function resolveServiceHost(): string {
 }
 
 const MAX_LOG_LENGTH = 1000;
-const SENSITIVE_KEYS = [
-  'password',
-  'newPassword',
-  'oldPassword',
-  'confirmPassword',
-  'token',
-  'accessToken',
-  'refreshToken',
-  'resetToken',
-  'value',
-  'secret',
-  'authorization',
-];
+const MAX_STRING_LENGTH = 2000;
+const MAX_ARRAY_ITEMS = 20;
+const MAX_OBJECT_KEYS = 50;
+const MAX_DEPTH = 6;
+const SENSITIVE_KEYS = new Set(
+  [
+    'password',
+    'newPassword',
+    'oldPassword',
+    'confirmPassword',
+    'token',
+    'accessToken',
+    'refreshToken',
+    'resetToken',
+    // reset-password JWT id: the reset token itself is valid for 5 minutes (TRD3-11).
+    'jti',
+    'value',
+    'secret',
+    'code',
+    'authorization',
+    'cookie',
+  ].map((k) => k.toLowerCase()),
+);
+/** Patterns whose payloads/responses may carry secrets or bulk data — never previewed. */
+const OMITTED_PATTERN_PREFIXES = ['redis.', 'health.', 'email.', 'upload.'];
+const JWT_PATTERN = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
 
-/** Patterns whose payload/response carry credentials (sessions, reset tokens) — body never logged. */
-const BODYLESS_PATTERN_PREFIXES = ['log.', 'redis.', 'email.'];
+function isOmittedPattern(pattern: string): boolean {
+  return OMITTED_PATTERN_PREFIXES.some((prefix) => pattern.startsWith(prefix));
+}
 
-function redact(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redact);
+function binarySize(value: unknown): number | undefined {
+  if (typeof value === 'string') return value.length;
+  if (Array.isArray(value)) return value.length;
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) return value.length;
   if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, val]) => [
-        key,
-        SENSITIVE_KEYS.includes(key) ? '[REDACTED]' : redact(val),
-      ]),
-    );
+    const data = (value as { data?: unknown }).data;
+    if (Array.isArray(data)) return data.length;
   }
-  return value;
+  return undefined;
+}
+
+/**
+ * Bounded, redacted copy of `value`: sensitive keys and JWT-shaped strings are masked, `buffer`
+ * fields become a size marker, and long strings/arrays/objects are cut BEFORE serialisation so a
+ * big payload (file upload, large list) is never fully stringified.
+ */
+function redact(value: unknown, depth = 0): unknown {
+  if (typeof value === 'string') {
+    return value.slice(0, MAX_STRING_LENGTH).replace(JWT_PATTERN, '[REDACTED]');
+  }
+  if (value === null || typeof value !== 'object') return value;
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array)
+    return `[binary ${value.length} bytes]`;
+  if (depth >= MAX_DEPTH) return '[MaxDepth]';
+  if (Array.isArray(value)) {
+    const items = value.slice(0, MAX_ARRAY_ITEMS).map((v) => redact(v, depth + 1));
+    if (value.length > MAX_ARRAY_ITEMS) items.push(`…(${value.length - MAX_ARRAY_ITEMS} more)`);
+    return items;
+  }
+  const entries = Object.entries(value as Record<string, unknown>);
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of entries.slice(0, MAX_OBJECT_KEYS)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+      out[key] = '[REDACTED]';
+      continue;
+    }
+    const size = key === 'buffer' ? binarySize(val) : undefined;
+    out[key] = size !== undefined ? `[binary ${size} bytes]` : redact(val, depth + 1);
+  }
+  if (entries.length > MAX_OBJECT_KEYS) out['…'] = `${entries.length - MAX_OBJECT_KEYS} more keys`;
+  return out;
 }
 
 /** Best-effort, redacted+truncated preview of the RPC payload — never throws. */
@@ -155,15 +199,16 @@ export class TraceContextInterceptor implements NestInterceptor {
     this.logger.log(`[RPC] ${pattern} <- ${trace}`);
     // Don't log the logging plumbing itself as a request row.
     const isLogPattern = pattern.startsWith('log.');
-    const isBodyless = BODYLESS_PATTERN_PREFIXES.some((prefix) => pattern.startsWith(prefix));
-    const requestBody = isBodyless ? undefined : previewPayload(context);
+    const omitBodies = isLogPattern || isOmittedPattern(pattern);
+    const requestBody = omitBodies ? undefined : previewPayload(context);
 
     return new Observable((subscriber) => {
       let responseData: unknown;
+      let inner: Subscription | undefined;
       runWithRequestContext(
         { correlationId, traceId, parentTraceId, serviceName: SERVICE_NAME },
         () => {
-          next.handle().subscribe({
+          inner = next.handle().subscribe({
             next: (value) => {
               responseData = value;
               subscriber.next(value);
@@ -181,7 +226,7 @@ export class TraceContextInterceptor implements NestInterceptor {
                   parentTraceId,
                   requestBody,
                   host: resolveServiceHost(),
-                  responseBody: previewError(err),
+                  responseBody: omitBodies ? undefined : previewError(err),
                   errorMessage: (err as Error)?.message ?? String(err),
                 });
               }
@@ -200,7 +245,7 @@ export class TraceContextInterceptor implements NestInterceptor {
                   parentTraceId,
                   requestBody,
                   host: resolveServiceHost(),
-                  responseBody: isBodyless ? undefined : previewResponse(responseData),
+                  responseBody: omitBodies ? undefined : previewResponse(responseData),
                 });
               }
               subscriber.complete();
@@ -208,6 +253,7 @@ export class TraceContextInterceptor implements NestInterceptor {
           });
         },
       );
+      return () => inner?.unsubscribe();
     });
   }
 }

@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpCode,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -11,6 +12,7 @@ import {
   Res,
   UploadedFile,
   UploadedFiles,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -25,7 +27,10 @@ import {
   ApiResponse as SwaggerResponse,
 } from '@nestjs/swagger';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { Roles } from '@packages/decorators';
+import { RolesGuard } from '@packages/guards';
 import { StatusCodes } from 'http-status-codes';
+import { MAX_UPLOAD_FILES } from './upload.constant';
 import { UploadService } from './upload.service';
 import type { MulterFile, UploadResponse } from './upload.interface';
 
@@ -33,6 +38,8 @@ import type { MulterFile, UploadResponse } from './upload.interface';
 @ApiBearerAuth('access-token')
 @Controller('upload')
 export class UploadController {
+  private readonly logger = new Logger(UploadController.name);
+
   constructor(private readonly uploadService: UploadService) {}
 
   @Post()
@@ -55,7 +62,7 @@ export class UploadController {
   }
 
   @Post('multiple')
-  @UseInterceptors(FilesInterceptor('files', 10))
+  @UseInterceptors(FilesInterceptor('files', MAX_UPLOAD_FILES))
   @HttpCode(StatusCodes.CREATED)
   @ApiOperation({ summary: 'Upload multiple files' })
   @ApiConsumes('multipart/form-data')
@@ -92,10 +99,15 @@ export class UploadController {
       const filename = (key.split('/').pop() as string).replace(/[^\w.-]/g, '_');
       res.setHeader('Content-Type', contentType);
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('X-Content-Type-Options', 'nosniff');
       if (contentLength !== undefined) res.setHeader('Content-Length', contentLength);
-      // `pipeline` forwards stream errors and destroys both ends, so a mid-transfer R2 failure
-      // or a client disconnect can't surface as an uncaught 'error' event.
-      pipeline(stream, res, () => undefined);
+      // pipeline destroys both ends on error or premature client close (no S3 connection leak / unhandled 'error').
+      pipeline(stream, res, (pipeErr) => {
+        if (pipeErr) {
+          this.logger.warn(`Download stream aborted for "${key}": ${pipeErr.message}`);
+          if (!res.destroyed) res.destroy();
+        }
+      });
     } catch (err: unknown) {
       const e = err as { name?: string };
       if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
@@ -105,6 +117,8 @@ export class UploadController {
     }
   }
 
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Delete(':key')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Delete file' })

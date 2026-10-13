@@ -59,3 +59,8 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # docker compose env (real secrets)
 docker.env
+
+# env files: everything except the committed templates (.env.example, .env.compose.example)
+.env*
+!.env.example
+!.env.compose.example

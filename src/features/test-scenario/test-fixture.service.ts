@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ERROR_MESSAGES } from 'src/data/constants';
 import type {
   CreateTestFixtureDto,
@@ -7,6 +12,7 @@ import type {
 } from '@packages/entities/test-scenario';
 import { TestAuthService } from './test-auth.service';
 import { TestFixtureRepository, type TestFixtureRow } from './test-fixture.repository';
+import { buildGatewayUrl } from './gateway-url';
 import { extractPath } from './test-template';
 
 const RESOLVE_TIMEOUT_MS = 10_000;
@@ -26,8 +32,10 @@ export class TestFixtureService {
     private readonly auth: TestAuthService,
   ) {}
 
-  findAll() {
-    return this.repo.findAll();
+  /** Never exposes the stored value (F-22) — only whether one is cached/set. */
+  async findAll() {
+    const rows = await this.repo.findAll();
+    return rows.map(({ value, ...rest }) => ({ ...rest, value: null, hasValue: value != null }));
   }
 
   async create(dto: CreateTestFixtureDto) {
@@ -40,10 +48,14 @@ export class TestFixtureService {
   async update(id: string, dto: UpdateTestFixtureDto) {
     if (dto.key) {
       const other = await this.repo.findByKey(dto.key);
-      if (other && other.id !== id) throw new ConflictException(ERROR_MESSAGES.TEST_FIXTURE_KEY_TAKEN);
+      if (other && other.id !== id)
+        throw new ConflictException(ERROR_MESSAGES.TEST_FIXTURE_KEY_TAKEN);
     }
     // A new resolver invalidates the value cached from the old one.
-    const patch = dto.resolver !== undefined && dto.value === undefined ? { ...dto, value: null, resolvedAt: null } : dto;
+    const patch =
+      dto.resolver !== undefined && dto.value === undefined
+        ? { ...dto, value: null, resolvedAt: null }
+        : dto;
     const row = await this.repo.update(id, patch);
     if (!row) throw new NotFoundException(ERROR_MESSAGES.TEST_FIXTURE_NOT_FOUND);
     return row;
@@ -81,12 +93,18 @@ export class TestFixtureService {
 
   private async resolveRow(fixture: TestFixtureRow, callerToken?: string) {
     const resolver = fixture.resolver as FixtureResolverDto;
+    let url: string;
+    try {
+      url = buildGatewayUrl(resolver.path);
+    } catch (err) {
+      throw new FixtureError(
+        `Fixture "${fixture.key}": ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
     const token = await this.auth.tokenFor(resolver.authProfile, callerToken);
-    const baseUrl = (process.env.GATEWAY_BASE_URL ?? 'http://localhost:8888').replace(/\/+$/, '');
-
     let res: Response;
     try {
-      res = await fetch(`${baseUrl}${resolver.path}`, {
+      res = await fetch(url, {
         method: 'GET',
         headers: token ? { authorization: `Bearer ${token}` } : {},
         signal: AbortSignal.timeout(RESOLVE_TIMEOUT_MS),
@@ -96,15 +114,19 @@ export class TestFixtureService {
         `Fixture "${fixture.key}": GET ${resolver.path} failed (${err instanceof Error ? err.message : String(err)})`,
       );
     }
-    if (!res.ok) throw new FixtureError(`Fixture "${fixture.key}": GET ${resolver.path} returned ${res.status}`);
+    if (!res.ok)
+      throw new FixtureError(
+        `Fixture "${fixture.key}": GET ${resolver.path} returned ${res.status}`,
+      );
 
     const body: unknown = await res.json().catch(() => undefined);
     const extracted = extractPath(body, resolver.extract);
     if (extracted === undefined || extracted === null) {
-      throw new FixtureError(`Fixture "${fixture.key}": nothing at "${resolver.extract}" in GET ${resolver.path}`);
+      throw new FixtureError(
+        `Fixture "${fixture.key}": nothing at "${resolver.extract}" in GET ${resolver.path}`,
+      );
     }
-    const value =
-      typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
+    const value = typeof extracted === 'string' ? extracted : JSON.stringify(extracted);
     const row = await this.repo.update(fixture.id, { value, resolvedAt: new Date() });
     return row ?? { ...fixture, value };
   }

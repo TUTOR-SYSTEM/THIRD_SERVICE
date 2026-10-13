@@ -91,7 +91,7 @@ describe('EmailService', () => {
 
   it('propagates transport exceptions from the Resend SDK', async () => {
     sendMock.mockRejectedValue(new Error('ECONNRESET'));
-    const service = new EmailService(makeConfig(baseConfig));
+    const service = new EmailService(makeConfig({ ...baseConfig, TEST_EMAIL_RECIPIENT: 'qa@x.dev' }));
 
     await expect(service.testSendEmailService()).rejects.toThrow('ECONNRESET');
   });

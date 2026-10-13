@@ -2,6 +2,10 @@
 // (module-top-level `process.env.RABBITMQ_URL` reads) never races ConfigModule's
 // dotenv loading — see gateway/USER's main.ts for the bug this prevents.
 import 'dotenv/config';
+import { ConfigService } from '@nestjs/config';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { getJwtTokensConfig } from '@packages/configs/jwt-sign.config';
+import { resolveCorsOrigins, resolveTrustProxy } from '@packages/helpers';
 import { Logger } from '@nestjs/common';
 import { NestFactory, Reflector } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
@@ -10,16 +14,29 @@ import { AppModule } from './app.module';
 import { ResponseInterceptor } from '@packages/interceptor/response.interceptor';
 import { ErrorInterceptor, LoggerInterceptor } from '@packages/interceptor';
 import { HttpExceptionFilter, RpcExceptionFilter } from '@packages/filters';
-import { TraceContextInterceptor } from '@packages/interceptor';
+import { RmqAckInterceptor, TraceContextInterceptor } from '@packages/interceptor';
 import { setLogSink } from '@packages/context/log-sink';
 import { LogService } from './features/log/log.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
+  // Fail fast in production: the guest/guest fallback below is for local dev only.
+  if (process.env.NODE_ENV === 'production' && !process.env.RABBITMQ_URL?.trim()) {
+    throw new Error('RABBITMQ_URL is required when NODE_ENV=production');
+  }
+
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
-  app.enableCors({ origin: true, credentials: true });
+  // Fail fast at boot when no JWT secret is configured (no insecure fallback).
+  getJwtTokensConfig(app.get(ConfigService));
+
+  const trustProxy = resolveTrustProxy();
+  if (trustProxy !== undefined) {
+    app.set('trust proxy', trustProxy);
+  }
+
+  app.enableCors({ origin: resolveCorsOrigins(), credentials: true });
   app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)));
   app.useGlobalInterceptors(new ErrorInterceptor(), new LoggerInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
@@ -41,9 +58,12 @@ async function bootstrap() {
     {
       transport: Transport.RMQ,
       options: {
-        urls: [process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672'],
+        urls: [process.env.RABBITMQ_URL?.trim() || 'amqp://guest:guest@localhost:5672'],
         queue: process.env.THIRD_QUEUE ?? 'third_queue',
         queueOptions: { durable: true },
+        // Manual ack (see RmqAckInterceptor): messages stay unacked until the handler finishes,
+        // so prefetchCount bounds in-flight work instead of being ignored under auto-ack.
+        noAck: false,
         prefetchCount: 10,
       },
     },
@@ -56,51 +76,54 @@ async function bootstrap() {
   rmqMicroservice.useGlobalFilters(new RpcExceptionFilter());
   // Opens the correlationId/traceId/serviceName RequestContext for every @MessagePattern
   // handler — see [[rmq-rpc-plumbing]] memory.
-  rmqMicroservice.useGlobalInterceptors(new TraceContextInterceptor());
+  // Ack interceptor is outermost so it also sees failures raised by TraceContextInterceptor.
+  rmqMicroservice.useGlobalInterceptors(new RmqAckInterceptor(), new TraceContextInterceptor());
 
-  const config = new DocumentBuilder()
-    .setTitle('Backends API')
-    .setDescription('API documentation for the Backends financial management system')
-    .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        description: 'Enter JWT access token',
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Backends API')
+      .setDescription('API documentation for the Backends financial management system')
+      .setVersion('1.0')
+      .addBearerAuth(
+        {
+          type: 'http',
+          scheme: 'bearer',
+          bearerFormat: 'JWT',
+          description: 'Enter JWT access token',
+        },
+        'access-token',
+      )
+      // ── Tutor Management ─────────────────────────────
+      .addTag('Users')
+      .addTag('Auth')
+      .addTag('Students')
+      .addTag('Curriculum')
+      .addTag('Chapter')
+      .addTag('Lesson')
+      .addTag('Classes')
+      .addTag('Schedules')
+      .addTag('Sessions')
+      .addTag('Exercises')
+      .addTag('Tuitions')
+      .addTag('Notifications')
+      // ── Finance Management ────────────────────────────
+      .addTag('Categories')
+      .addTag('Wallets')
+      .addTag('Transactions')
+      .addTag('Reports')
+      // ── System ────────────────────────────────────────
+      .addTag('Upload')
+      .addTag('Cloudinary')
+      .addTag('Health')
+      .addTag('Redis')
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api-docs', app, document, {
+      swaggerOptions: {
+        persistAuthorization: true,
       },
-      'access-token',
-    )
-    // ── Tutor Management ─────────────────────────────
-    .addTag('Users')
-    .addTag('Auth')
-    .addTag('Students')
-    .addTag('Curriculum')
-    .addTag('Chapter')
-    .addTag('Lesson')
-    .addTag('Classes')
-    .addTag('Schedules')
-    .addTag('Sessions')
-    .addTag('Exercises')
-    .addTag('Tuitions')
-    .addTag('Notifications')
-    // ── Finance Management ────────────────────────────
-    .addTag('Categories')
-    .addTag('Wallets')
-    .addTag('Transactions')
-    .addTag('Reports')
-    // ── System ────────────────────────────────────────
-    .addTag('Upload')
-    .addTag('Cloudinary')
-    .addTag('Health')
-    .addTag('Redis')
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api-docs', app, document, {
-    swaggerOptions: {
-      persistAuthorization: true,
-    },
-  });
+    });
+  }
 
   await app.startAllMicroservices();
   Logger.log(

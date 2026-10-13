@@ -44,9 +44,9 @@ describe('RpcExceptionFilter — response shapes', () => {
     expect(payload).toMatchObject({ serviceName: 'third-service' });
   });
 
-  it('falls back to the Error message for a non-HTTP error', async () => {
+  it('hides the Error message behind a generic one for a non-HTTP error', async () => {
     const payload = await rpcPayload(new Error('oops'));
-    expect(payload).toMatchObject({ statusCode: 500, message: 'oops', serviceName: 'third-service' });
+    expect(payload).toMatchObject({ statusCode: 500, message: 'Internal server error', serviceName: 'third-service' });
   });
 
   it('answers 500 with a generic message for a thrown non-Error value', async () => {

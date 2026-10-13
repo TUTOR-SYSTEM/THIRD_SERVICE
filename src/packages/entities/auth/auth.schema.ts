@@ -27,7 +27,7 @@ export const AUTH_MESSAGES = {
 
 export const emailFieldSchema = z
   .string({ message: AUTH_MESSAGES.EMAIL_REQUIRED })
-  .min(1, { message : AUTH_MESSAGES.EMAIL_REQUIRED})
+  .min(1, { message: AUTH_MESSAGES.EMAIL_REQUIRED })
   .email({ message: AUTH_MESSAGES.EMAIL_INVALID });
 
 export const passwordFieldSchema = z

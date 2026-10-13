@@ -63,7 +63,7 @@ describe('RedisService', () => {
 
       const client = lastClient();
       expect(client.args[0]).toBe('redis://cache:6379/0');
-      expect(client.args[1]).toMatchObject({ lazyConnect: true, maxRetriesPerRequest: null });
+      expect(client.args[1]).toMatchObject({ lazyConnect: true, maxRetriesPerRequest: 3 });
     });
 
     it('falls back to host/port/password when REDIS_URL is blank', () => {

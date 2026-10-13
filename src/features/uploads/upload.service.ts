@@ -1,4 +1,11 @@
-import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  Logger,
+  OnModuleInit,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -9,7 +16,14 @@ import {
 import type { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
-import { MAX_UPLOAD_BYTES, S3_CLIENT } from './upload.constant';
+import {
+  BLOCKED_MIMETYPES,
+  DOCUMENT_CONTENT_TYPES,
+  IMAGE_EXTENSIONS,
+  MAX_UPLOAD_BYTES,
+  S3_CLIENT,
+  UPLOAD_KEY_PREFIX,
+} from './upload.constant';
 import type { MulterFile, UploadResponse } from './upload.interface';
 
 @Injectable()
@@ -52,18 +66,41 @@ export class UploadService implements OnModuleInit {
     }
   }
 
-  async upload(file: MulterFile, folder = 'uploads'): Promise<UploadResponse> {
-    if (!this.s3) throw new Error('Cloudflare R2 not configured');
-    if (!file?.buffer || !file.mimetype) throw new BadRequestException('file is required');
-    if (file.buffer.length > MAX_UPLOAD_BYTES) {
-      throw new BadRequestException(`File exceeds ${MAX_UPLOAD_BYTES} bytes`);
+  private requireS3(): S3Client {
+    if (!this.s3) throw new ServiceUnavailableException('Cloudflare R2 not configured');
+    return this.s3;
+  }
+
+  private assertValidKey(key: string): void {
+    if (!key || !key.startsWith(UPLOAD_KEY_PREFIX) || key.includes('..') || key.includes('\\')) {
+      throw new BadRequestException('Invalid file key');
     }
-    const isImage = file.mimetype.startsWith('image/');
+  }
+
+  async upload(file: MulterFile, folder = 'uploads'): Promise<UploadResponse> {
+    const s3 = this.requireS3();
+    if (!file) {
+      throw new BadRequestException('file is required');
+    }
+    const size = file.buffer?.length ?? 0;
+    if (size === 0 || size > MAX_UPLOAD_BYTES) {
+      throw new BadRequestException(
+        `File must be between 1 byte and ${MAX_UPLOAD_BYTES / 1024 / 1024}MB`,
+      );
+    }
+    const mimetype = (file.mimetype ?? '').toLowerCase();
     const dot = file.originalname.lastIndexOf('.');
-    const originalExt = dot >= 0 ? file.originalname.slice(dot + 1) : '';
+    const originalExt = dot >= 0 ? file.originalname.slice(dot + 1).toLowerCase() : '';
+    const isImage = IMAGE_EXTENSIONS.has(originalExt);
+    const documentType = DOCUMENT_CONTENT_TYPES[originalExt];
+    if (BLOCKED_MIMETYPES.has(mimetype) || (!isImage && !documentType)) {
+      throw new BadRequestException('File type is not allowed');
+    }
     // Images are always re-encoded to JPEG below, so key/mimetype must say so.
-    const ext = isImage ? 'jpg' : originalExt || 'bin';
+    const ext = isImage ? 'jpg' : originalExt;
+    const contentType = isImage ? 'image/jpeg' : documentType;
     const key = `${folder}/${uuidv4()}.${ext}`;
+    const url = this.getPublicUrl(key);
 
     let processedBuffer = file.buffer;
 
@@ -74,37 +111,37 @@ export class UploadService implements OnModuleInit {
           .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 80, mozjpeg: true })
           .toBuffer();
-      } catch {
+      } catch (err) {
+        this.logger.warn(`Image decode failed: ${(err as Error).message}`);
         throw new BadRequestException('Invalid image file');
       }
     }
 
-    await this.s3.send(
+    await s3.send(
       new PutObjectCommand({
         Bucket: this.bucket,
         Key: key,
         Body: processedBuffer,
-        ContentType: isImage ? 'image/jpeg' : file.mimetype,
+        ContentType: contentType,
+        ...(isImage ? {} : { ContentDisposition: 'attachment' }),
       }),
     );
 
-    return {
-      url: this.getPublicUrl(key),
-      key,
-      size: processedBuffer.length,
-      mimetype: isImage ? 'image/jpeg' : file.mimetype,
-    };
+    return { url, key, size: processedBuffer.length, mimetype: contentType };
   }
 
   getPublicUrl(key: string): string {
-    return `${this.configService.get<string>('CLOUDFLARE_R2_PUBLIC_URL')}/${key}`;
+    const base = this.configService.get<string>('CLOUDFLARE_R2_PUBLIC_URL');
+    if (!base) throw new ServiceUnavailableException('CLOUDFLARE_R2_PUBLIC_URL is not configured');
+    return `${base.replace(/\/+$/, '')}/${key}`;
   }
 
   async download(
     key: string,
   ): Promise<{ stream: Readable; contentType: string; contentLength?: number }> {
-    if (!this.s3) throw new Error('Cloudflare R2 not configured');
-    const result = await this.s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    this.assertValidKey(key);
+    const s3 = this.requireS3();
+    const result = await s3.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
     return {
       stream: result.Body as Readable,
       contentType: result.ContentType ?? 'application/octet-stream',
@@ -113,8 +150,9 @@ export class UploadService implements OnModuleInit {
   }
 
   async delete(key: string): Promise<void> {
-    if (!this.s3) throw new Error('Cloudflare R2 not configured');
-    await this.s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+    this.assertValidKey(key);
+    const s3 = this.requireS3();
+    await s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
   async uploadMultiple(files: MulterFile[], folder = 'uploads'): Promise<UploadResponse[]> {

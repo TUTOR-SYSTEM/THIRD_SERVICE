@@ -5,4 +5,3 @@ export * from './entities';
 export * from './interceptor';
 export * from './interfaces';
 export * from './filters';
-export * from './strategy';

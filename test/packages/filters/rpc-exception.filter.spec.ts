@@ -48,12 +48,12 @@ describe('RpcExceptionFilter', () => {
     expect(payload.serviceName).toBe('user');
   });
 
-  it('wraps a non-HTTP Error as a 500 with its message', async () => {
+  it('wraps a non-HTTP Error as a 500 with a generic message', async () => {
     const payload = await toPayload(new Error('db exploded'));
 
     expect(payload).toEqual({
       statusCode: 500,
-      message: 'db exploded',
+      message: 'Internal server error',
       serviceName: 'third-service',
     });
   });

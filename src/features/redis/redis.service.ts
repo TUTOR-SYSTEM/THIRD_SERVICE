@@ -14,8 +14,8 @@ const connectionOptions = {
   connectTimeout: 10_000,
   /** true (mặc định ioredis): lệnh chờ socket ready; false + lazyConnect dễ lỗi trước khi connect xong */
   enableOfflineQueue: true,
-  /** Giảm MaxRetriesPerRequestError khi đang reconnect so với mặc định 3 */
-  maxRetriesPerRequest: null,
+  /** Hữu hạn (không null) để lệnh fail nhanh khi Redis down thay vì treo vô hạn */
+  maxRetriesPerRequest: 3,
   /** Rejects a command (even one parked in the offline queue) after 5s so a dead Redis can't hang callers. */
   commandTimeout: 5_000,
 } as const satisfies Pick<
@@ -73,8 +73,8 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
    * without this, 'connect'/'ready' never fire at boot and the app looks "connected" (no error)
    * while actually not talking to Redis until some request happens to touch it. Triggering the
    * connect explicitly here surfaces success/failure at startup, same as DatabaseModule's
-   * `SELECT 1` check. Not thrown on failure — Redis is fails-open elsewhere (see
-   * JwtAuthGuard's session check) and ioredis keeps retrying against the same client in the
+   * `SELECT 1` check. Not thrown on failure — Redis consumers such as
+   * TokenBucketGuard fail open and ioredis keeps retrying against the same client in the
    * background, still logged by the 'error'/'connect'/'ready' listeners above.
    */
   async onModuleInit(): Promise<void> {
@@ -98,6 +98,13 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('key is required');
     }
     return await this.client.get(key);
+  }
+
+  async exists(key: string): Promise<boolean> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    return (await this.client.exists(key)) > 0;
   }
 
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {

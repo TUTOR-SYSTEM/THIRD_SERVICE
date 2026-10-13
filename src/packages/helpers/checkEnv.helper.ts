@@ -11,10 +11,9 @@ export function validateRequiredEnvs(
 
   if (missingEnvs.length > 0) {
     throw new Error(
-      [
-        'Missing required environment variables:',
-        ...missingEnvs.map((env) => `- ${env}`),
-      ].join('\n'),
+      ['Missing required environment variables:', ...missingEnvs.map((env) => `- ${env}`)].join(
+        '\n',
+      ),
     );
   }
 

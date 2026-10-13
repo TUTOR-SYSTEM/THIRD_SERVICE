@@ -12,13 +12,15 @@ import type {
   UpdateTestScenarioDto,
 } from '@packages/entities/test-scenario';
 import { testAuthProfileSchema } from '@packages/entities/test-scenario';
-import { TestAuthService } from './test-auth.service';
+import { TestAuthService, ACCOUNT_PROFILES, type AccountProfile } from './test-auth.service';
+import { buildGatewayUrl } from './gateway-url';
 import { TestFixtureService } from './test-fixture.service';
 import { TestScenarioRepository, scenarioKey } from './test-scenario.repository';
 import { generateForRoute, suggestFixtures } from './scenario-generator';
 import { builtinVariable, collectVariables, renderString, renderValue } from './test-template';
 
 const RUN_TIMEOUT_MS = 15_000;
+const WRITE_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 const ACCESS_TOKEN_VARIABLE = 'accessToken';
 const MAX_RESPONSE_BODY_LENGTH = 4000;
 const SENSITIVE_KEYS = [
@@ -208,6 +210,14 @@ export class TestScenarioService {
     return execution;
   }
 
+  /** F-15: write requests are blocked in production unless TEST_SCENARIO_ALLOW_WRITES=true. */
+  private writeBlockedReason(method: string): string | undefined {
+    if (!WRITE_METHODS.includes(method.toUpperCase())) return undefined;
+    if (process.env.NODE_ENV !== 'production') return undefined;
+    if (process.env.TEST_SCENARIO_ALLOW_WRITES === 'true') return undefined;
+    return `${method} requests are blocked in production; set TEST_SCENARIO_ALLOW_WRITES=true to allow write scenarios`;
+  }
+
   private async execute(
     scenario: InferSelectModel<typeof testScenarios>,
     ctx: { userId?: string; accessToken?: string },
@@ -250,20 +260,42 @@ export class TestScenarioService {
     }
     request.headers['x-correlation-id'] = correlationId;
 
-    const baseUrl = (process.env.GATEWAY_BASE_URL ?? 'http://localhost:8888').replace(/\/+$/, '');
+    const blocked = this.writeBlockedReason(scenario.method);
+    let url: string | undefined;
+    let urlError: string | undefined;
+    try {
+      url = buildGatewayUrl(request.path);
+    } catch (err) {
+      urlError = err instanceof Error ? err.message : String(err);
+    }
+    if (blocked || !url) {
+      return record({
+        actualStatus: null,
+        durationMs: 0,
+        errorMessage: `Setup failed: ${blocked ?? urlError}`,
+        requestPath: request.path,
+      });
+    }
     const started = Date.now();
     let actualStatus: number | null = null;
     let errorMessage: string | undefined;
     let responseBody: string | undefined;
     let rawBody: string | undefined;
     try {
-      const res = await fetch(`${baseUrl}${request.path}`, {
+      const res = await fetch(url, {
         method: scenario.method,
         headers: request.headers,
         body: request.body,
         signal: AbortSignal.timeout(RUN_TIMEOUT_MS),
       });
       actualStatus = res.status;
+      // A rejected token must not stay cached: the next run logs the account in again.
+      if (
+        res.status === 401 &&
+        (ACCOUNT_PROFILES as readonly string[]).includes(scenario.authProfile ?? '')
+      ) {
+        this.auth.invalidate?.(scenario.authProfile as AccountProfile);
+      }
       // Reading the body also drains it, so the connection is released.
       rawBody = await res.text().catch(() => '');
       responseBody = formatResponseBody(rawBody);

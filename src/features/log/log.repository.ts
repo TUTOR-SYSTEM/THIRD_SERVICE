@@ -3,6 +3,7 @@ import { and, count, desc, eq, gte, ilike, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
 import { requestLogs } from '../../database/schema';
+import { escapeLike } from '@packages/helpers';
 import type {
   CreateRequestLogDto,
   EndpointStatsDto,
@@ -50,7 +51,7 @@ export class LogRepository {
     if (serviceName) conditions.push(eq(requestLogs.serviceName, serviceName));
     if (type) conditions.push(eq(requestLogs.type, type));
     if (correlationId) conditions.push(eq(requestLogs.correlationId, correlationId));
-    if (search) conditions.push(ilike(requestLogs.path, `%${search}%`));
+    if (search) conditions.push(ilike(requestLogs.path, `%${escapeLike(search)}%`));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
@@ -77,12 +78,13 @@ export class LogRepository {
     };
   }
 
-  async findByCorrelationId(correlationId: string) {
+  async findByCorrelationId(correlationId: string, limit = 500) {
     return this.db
       .select()
       .from(requestLogs)
       .where(eq(requestLogs.correlationId, correlationId))
-      .orderBy(requestLogs.createdAt);
+      .orderBy(requestLogs.createdAt)
+      .limit(limit);
   }
 
   /** One row per `(method, path)` seen at the gateway HTTP edge in the last 24h — the "calls/24h"

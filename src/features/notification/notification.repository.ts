@@ -1,8 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
 import { notifications } from '../../database/schema';
+import { escapeLike } from '@packages/helpers';
 import type {
   CreateNotificationDto,
   GetNotificationsQueryDto,
@@ -45,7 +46,7 @@ export class NotificationRepository {
     ];
 
     if (search) {
-      conditions.push(ilike(notifications.title, `%${search}%`));
+      conditions.push(ilike(notifications.title, `%${escapeLike(search)}%`));
     }
     if (type) conditions.push(eq(notifications.type, type));
     if (isRead !== undefined) conditions.push(eq(notifications.isRead, isRead));
@@ -78,41 +79,52 @@ export class NotificationRepository {
     };
   }
 
-  /** Row is visible to its recipient or its sender; with no `userId` the check is skipped. */
-  private scopeById(id: string, userId?: string): SQL {
-    const byId = eq(notifications.id, id);
-    if (!userId) return byId;
-    return and(byId, or(eq(notifications.userId, userId), eq(notifications.senderId, userId)))!;
-  }
-
+  /** `userId` set => only rows the user received or sent; omitted (ADMIN) => unrestricted. */
   async findById(id: string, userId?: string) {
-    const [note] = await this.db.select().from(notifications).where(this.scopeById(id, userId));
+    const where = userId
+      ? and(
+          eq(notifications.id, id),
+          or(eq(notifications.userId, userId), eq(notifications.senderId, userId)),
+        )
+      : eq(notifications.id, id);
+    const [note] = await this.db.select().from(notifications).where(where);
     return note ?? null;
   }
 
+  /** `userId` set => recipient-only; omitted (ADMIN) => unrestricted. */
   async markAsRead(id: string, userId?: string) {
     const [note] = await this.db
       .update(notifications)
-      .set({ isRead: true })
-      .where(this.scopeById(id, userId))
+      // coalesce: re-reading an already-read notification keeps the first read time.
+      .set({ isRead: true, readAt: sql`coalesce(${notifications.readAt}, now())` })
+      .where(this.ownedBy(id, userId))
       .returning();
     return note ?? null;
   }
 
+  /**
+   * Marks the caller's own unread notifications (recipient only). Rows the caller *sent* are not
+   * touched: their read state belongs to the recipient. Already-read rows are skipped so `readAt`
+   * is never overwritten.
+   */
   async markAllAsRead(userId: string) {
     const updated = await this.db
       .update(notifications)
-      .set({ isRead: true })
-      .where(or(eq(notifications.userId, userId), eq(notifications.senderId, userId)))
+      .set({ isRead: true, readAt: new Date() })
+      .where(and(eq(notifications.userId, userId), eq(notifications.isRead, false)))
       .returning({ id: notifications.id });
     return { markedAll: true, count: updated.length };
   }
 
+  /** `userId` set => recipient-only; omitted (ADMIN) => unrestricted. */
   async delete(id: string, userId?: string) {
-    const [note] = await this.db
-      .delete(notifications)
-      .where(this.scopeById(id, userId))
-      .returning();
+    const [note] = await this.db.delete(notifications).where(this.ownedBy(id, userId)).returning();
     return !!note;
+  }
+
+  private ownedBy(id: string, userId?: string) {
+    return userId
+      ? and(eq(notifications.id, id), eq(notifications.userId, userId))
+      : eq(notifications.id, id);
   }
 }

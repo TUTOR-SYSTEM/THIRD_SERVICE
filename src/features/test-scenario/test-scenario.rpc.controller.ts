@@ -1,5 +1,19 @@
 import { Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
+import {
+  bulkCreateTestScenariosSchema,
+  createTestFixtureSchema,
+  createTestScenarioSchema,
+  generateTestScenariosSchema,
+  getTestScenariosQuerySchema,
+  idPayloadSchema,
+  resolveFixturePayloadSchema,
+  runsPayloadSchema,
+  runTestScenarioPayloadSchema,
+  updateTestFixturePayloadSchema,
+  updateTestScenarioPayloadSchema,
+} from '@packages/entities/test-scenario';
+import { ZodValidationPipe } from '@packages/pipes';
 import type {
   CreateTestFixtureDto,
   CreateTestScenarioDto,
@@ -25,22 +39,30 @@ export class TestScenarioRpcController {
   ) {}
 
   @MessagePattern('testscenario.create')
-  create(@Payload() dto: CreateTestScenarioDto) {
+  create(@Payload(new ZodValidationPipe(createTestScenarioSchema)) dto: CreateTestScenarioDto) {
     return this.service.create(dto);
   }
 
   @MessagePattern('testscenario.list')
-  list(@Payload() query: GetTestScenariosQueryDto) {
+  list(
+    @Payload(new ZodValidationPipe(getTestScenariosQuerySchema)) query: GetTestScenariosQueryDto,
+  ) {
     return this.service.findAll(query);
   }
 
   @MessagePattern('testscenario.update')
-  update(@Payload() payload: { id: string; dto: UpdateTestScenarioDto }) {
+  update(
+    @Payload(new ZodValidationPipe(updateTestScenarioPayloadSchema))
+    payload: {
+      id: string;
+      dto: UpdateTestScenarioDto;
+    },
+  ) {
     return this.service.update(payload.id, payload.dto);
   }
 
   @MessagePattern('testscenario.delete')
-  del(@Payload() payload: { id: string }) {
+  del(@Payload(new ZodValidationPipe(idPayloadSchema)) payload: { id: string }) {
     return this.service.delete(payload.id);
   }
 
@@ -50,13 +72,19 @@ export class TestScenarioRpcController {
   }
 
   @MessagePattern('testscenario.runs')
-  runs(@Payload() payload: { id: string; limit?: number }) {
+  runs(@Payload(new ZodValidationPipe(runsPayloadSchema)) payload: { id: string; limit?: number }) {
     return this.service.findRuns(payload.id, payload.limit);
   }
 
   @MessagePattern('testscenario.run')
   run(
-    @Payload() payload: { id: string; userId?: string; accessToken?: string; wait?: boolean },
+    @Payload(new ZodValidationPipe(runTestScenarioPayloadSchema))
+    payload: {
+      id: string;
+      userId?: string;
+      accessToken?: string;
+      wait?: boolean;
+    },
   ) {
     return this.service.run(
       payload.id,
@@ -66,12 +94,17 @@ export class TestScenarioRpcController {
   }
 
   @MessagePattern('testscenario.generate')
-  generate(@Payload() dto: GenerateScenariosDto) {
+  generate(@Payload(new ZodValidationPipe(generateTestScenariosSchema)) dto: GenerateScenariosDto) {
     return this.service.generate(dto);
   }
 
   @MessagePattern('testscenario.createMany')
-  createMany(@Payload() payload: { scenarios: CreateTestScenarioDto[] }) {
+  createMany(
+    @Payload(new ZodValidationPipe(bulkCreateTestScenariosSchema))
+    payload: {
+      scenarios: CreateTestScenarioDto[];
+    },
+  ) {
     return this.service.createMany(payload.scenarios);
   }
 
@@ -86,22 +119,36 @@ export class TestScenarioRpcController {
   }
 
   @MessagePattern('testscenario.fixtures.create')
-  createFixture(@Payload() dto: CreateTestFixtureDto) {
+  createFixture(
+    @Payload(new ZodValidationPipe(createTestFixtureSchema)) dto: CreateTestFixtureDto,
+  ) {
     return this.fixtures.create(dto);
   }
 
   @MessagePattern('testscenario.fixtures.update')
-  updateFixture(@Payload() payload: { id: string; dto: UpdateTestFixtureDto }) {
+  updateFixture(
+    @Payload(new ZodValidationPipe(updateTestFixturePayloadSchema))
+    payload: {
+      id: string;
+      dto: UpdateTestFixtureDto;
+    },
+  ) {
     return this.fixtures.update(payload.id, payload.dto);
   }
 
   @MessagePattern('testscenario.fixtures.delete')
-  deleteFixture(@Payload() payload: { id: string }) {
+  deleteFixture(@Payload(new ZodValidationPipe(idPayloadSchema)) payload: { id: string }) {
     return this.fixtures.delete(payload.id);
   }
 
   @MessagePattern('testscenario.fixtures.resolve')
-  resolveFixture(@Payload() payload: { id: string; accessToken?: string }) {
+  resolveFixture(
+    @Payload(new ZodValidationPipe(resolveFixturePayloadSchema))
+    payload: {
+      id: string;
+      accessToken?: string;
+    },
+  ) {
     return this.fixtures.resolve(payload.id, payload.accessToken);
   }
 }

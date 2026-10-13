@@ -13,6 +13,7 @@ import { Server, Socket } from 'socket.io';
 import { DRIZZLE } from '../../database/database.module';
 import { resolveJwtAccessSecret } from '../../packages/configs/jwt-sign.config';
 import { requestLogs, users } from '../../database/schema';
+import { resolveCorsOrigins } from '../../packages/helpers/cors.helper';
 
 type RequestLogRow = typeof requestLogs.$inferSelect;
 
@@ -30,12 +31,14 @@ type AuthenticatedSocket = Socket & {
  */
 @Injectable()
 @WebSocketGateway({
-  cors: { origin: true, credentials: true },
+  cors: { origin: resolveCorsOrigins(), credentials: true },
   namespace: '/logs',
 })
 export class LogGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer()
   server!: Server;
+
+  private readonly expiryTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
     private readonly jwtService: JwtService,
@@ -77,17 +80,31 @@ export class LogGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       client.userId = userId;
       client.userRole = 'ADMIN';
+      await client.join('admins');
+
+      // Drop the socket once its access token expires.
+      const exp = (decoded as Record<string, unknown>).exp;
+      if (typeof exp === 'number') {
+        const ms = Math.max(0, exp * 1000 - Date.now());
+        const timer = setTimeout(() => client.disconnect(), ms);
+        timer.unref?.();
+        this.expiryTimers.set(client.id, timer);
+      }
     } catch {
       client.disconnect();
     }
   }
 
-  handleDisconnect(): void {
-    // No per-connection state to clean up — unlike ChatGateway there's no online-user roster.
+  handleDisconnect(client?: AuthenticatedSocket): void {
+    const timer = client?.id ? this.expiryTimers.get(client.id) : undefined;
+    if (timer) {
+      clearTimeout(timer);
+      this.expiryTimers.delete(client!.id);
+    }
   }
 
-  /** Broadcast one freshly-inserted `request_logs` row to every connected admin viewer. */
+  /** Broadcast one freshly-inserted `request_logs` row to the `admins` room (authenticated admins only). */
   emitNewLog(row: RequestLogRow): void {
-    this.server?.emit('log:new', row);
+    this.server?.to('admins').emit('log:new', row);
   }
 }

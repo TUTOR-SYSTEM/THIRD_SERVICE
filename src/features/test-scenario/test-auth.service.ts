@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { gatewayBaseUrl } from './gateway-url';
 import type { AuthProfileStatusDto, TestAuthProfile } from '@packages/entities/test-scenario';
 
 /** Profiles backed by a real test account (`caller`/`none` need no login). */
@@ -18,6 +19,13 @@ function accountFromEnv(profile: AccountProfile): { email: string; password: str
   const separator = raw.indexOf(':');
   if (separator <= 0) return null;
   return { email: raw.slice(0, separator), password: raw.slice(separator + 1) };
+}
+
+/** `student@x.dev` → `s******@x.dev` (first char + stars, domain kept). */
+function maskEmail(email: string): string {
+  const at = email.lastIndexOf('@');
+  if (at <= 0) return '***';
+  return `${email[0]}${'*'.repeat(Math.min(Math.max(at - 1, 3), 8))}${email.slice(at)}`;
 }
 
 function expiryOf(token: string): number {
@@ -49,8 +57,13 @@ export class TestAuthService {
   statuses(): AuthProfileStatusDto[] {
     return ACCOUNT_PROFILES.map((profile) => {
       const account = accountFromEnv(profile);
-      return { profile, configured: !!account, email: account?.email ?? null };
+      return { profile, configured: !!account, email: account ? maskEmail(account.email) : null };
     });
+  }
+
+  /** Drops a profile's cached token (e.g. after the gateway answered 401). */
+  invalidate(profile: AccountProfile): void {
+    this.cache.delete(profile);
   }
 
   /**
@@ -78,9 +91,10 @@ export class TestAuthService {
   private async login(profile: AccountProfile): Promise<string> {
     const account = accountFromEnv(profile);
     const envName = `TEST_ACCOUNT_${profile.toUpperCase()}`;
-    if (!account) throw new AuthProfileError(`Auth profile "${profile}" is not configured (${envName})`);
+    if (!account)
+      throw new AuthProfileError(`Auth profile "${profile}" is not configured (${envName})`);
 
-    const baseUrl = (process.env.GATEWAY_BASE_URL ?? 'http://localhost:8888').replace(/\/+$/, '');
+    const baseUrl = gatewayBaseUrl();
     let res: Response;
     try {
       res = await fetch(`${baseUrl}/auth/login`, {
@@ -101,7 +115,7 @@ export class TestAuthService {
     const token = body?.data?.accessToken ?? body?.accessToken;
     if (!res.ok || !token) {
       throw new AuthProfileError(
-        `Login for auth profile "${profile}" (${account.email}) returned ${res.status} — check ${envName}`,
+        `Login for auth profile "${profile}" returned ${res.status} — check ${envName}`,
       );
     }
 
