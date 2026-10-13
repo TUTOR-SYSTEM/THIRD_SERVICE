@@ -2,24 +2,34 @@ import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } fr
 import type { Request, Response } from 'express';
 import { Observable, tap, finalize } from 'rxjs';
 
-const SENSITIVE_KEYS = [
-  'password',
-  'newPassword',
-  'oldPassword',
-  'confirmPassword',
-  'token',
-  'accessToken',
-  'refreshToken',
-];
+const SENSITIVE_KEYS = new Set(
+  [
+    'password',
+    'newPassword',
+    'oldPassword',
+    'confirmPassword',
+    'token',
+    'accessToken',
+    'refreshToken',
+    'resetToken',
+    'secret',
+    'authorization',
+    'cookie',
+  ].map((k) => k.toLowerCase()),
+);
 const MAX_LOG_LENGTH = 1000;
+const JWT_PATTERN = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
+/** Routes whose response data must never be logged. */
+const NO_RESPONSE_LOG_PATHS = ['/redis', '/upload/download', '/logs'];
 
 function redact(value: unknown): unknown {
+  if (typeof value === 'string') return value.replace(JWT_PATTERN, '[REDACTED]');
   if (Array.isArray(value)) return value.map(redact);
   if (value !== null && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, val]) => [
         key,
-        SENSITIVE_KEYS.includes(key) ? '[REDACTED]' : redact(val),
+        SENSITIVE_KEYS.has(key.toLowerCase()) ? '[REDACTED]' : redact(val),
       ]),
     );
   }
@@ -46,7 +56,11 @@ export class LoggerInterceptor implements NestInterceptor {
     const request = http.getRequest<Request>();
     const response = http.getResponse<Response>();
 
-    const { method, url } = request;
+    const { method } = request;
+    const url = (request.url ?? '').split('?')[0];
+    const suppressResponse = NO_RESPONSE_LOG_PATHS.some(
+      (p) => url === p || url.startsWith(`${p}/`),
+    );
     const body: unknown = request.body;
     const startTime = Date.now();
 
@@ -58,7 +72,9 @@ export class LoggerInterceptor implements NestInterceptor {
       tap({
         next: (data) => {
           this.logger.log(
-            `[Response] ${method} ${url} - ${response.statusCode} - data=${stringifyForLog(data)}`,
+            suppressResponse
+              ? `[Response] ${method} ${url} - ${response.statusCode}`
+              : `[Response] ${method} ${url} - ${response.statusCode} - data=${stringifyForLog(data)}`,
           );
         },
         error: (err) => {

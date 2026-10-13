@@ -3,6 +3,7 @@ import { and, count, desc, eq, ilike, or, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
 import { notifications } from '../../database/schema';
+import { escapeLike } from '@packages/helpers';
 import type {
   CreateNotificationDto,
   GetNotificationsQueryDto,
@@ -45,7 +46,7 @@ export class NotificationRepository {
     ];
 
     if (search) {
-      conditions.push(ilike(notifications.title, `%${search}%`));
+      conditions.push(ilike(notifications.title, `%${escapeLike(search)}%`));
     }
     if (type) conditions.push(eq(notifications.type, type));
     if (isRead !== undefined) conditions.push(eq(notifications.isRead, isRead));
@@ -78,6 +79,7 @@ export class NotificationRepository {
     };
   }
 
+<<<<<<< Updated upstream
   /** Row is visible to its recipient or its sender; with no `userId` the check is skipped. */
   private scopeById(id: string, userId?: string): SQL {
     const byId = eq(notifications.id, id);
@@ -90,11 +92,30 @@ export class NotificationRepository {
     return note ?? null;
   }
 
+=======
+  /** `userId` set => only rows the user received or sent; omitted (ADMIN) => unrestricted. */
+  async findById(id: string, userId?: string) {
+    const where = userId
+      ? and(
+          eq(notifications.id, id),
+          or(eq(notifications.userId, userId), eq(notifications.senderId, userId)),
+        )
+      : eq(notifications.id, id);
+    const [note] = await this.db.select().from(notifications).where(where);
+    return note ?? null;
+  }
+
+  /** `userId` set => recipient-only; omitted (ADMIN) => unrestricted. */
+>>>>>>> Stashed changes
   async markAsRead(id: string, userId?: string) {
     const [note] = await this.db
       .update(notifications)
       .set({ isRead: true })
+<<<<<<< Updated upstream
       .where(this.scopeById(id, userId))
+=======
+      .where(this.ownedBy(id, userId))
+>>>>>>> Stashed changes
       .returning();
     return note ?? null;
   }
@@ -108,11 +129,25 @@ export class NotificationRepository {
     return { markedAll: true, count: updated.length };
   }
 
+<<<<<<< Updated upstream
   async delete(id: string, userId?: string) {
     const [note] = await this.db
       .delete(notifications)
       .where(this.scopeById(id, userId))
+=======
+  /** `userId` set => recipient-only; omitted (ADMIN) => unrestricted. */
+  async delete(id: string, userId?: string) {
+    const [note] = await this.db
+      .delete(notifications)
+      .where(this.ownedBy(id, userId))
+>>>>>>> Stashed changes
       .returning();
     return !!note;
+  }
+
+  private ownedBy(id: string, userId?: string) {
+    return userId
+      ? and(eq(notifications.id, id), eq(notifications.userId, userId))
+      : eq(notifications.id, id);
   }
 }

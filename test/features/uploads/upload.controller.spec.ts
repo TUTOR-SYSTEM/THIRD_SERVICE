@@ -1,6 +1,10 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+<<<<<<< Updated upstream
 import { Readable, Writable } from 'stream';
+=======
+import { PassThrough, Readable } from 'stream';
+>>>>>>> Stashed changes
 import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
 import { UploadController } from 'src/features/uploads/upload.controller';
 import { UploadService } from 'src/features/uploads/upload.service';
@@ -18,6 +22,16 @@ const fakeRes = (): FakeRes => {
   return res;
 };
 
+const realRes = () => {
+  const res: any = new PassThrough();
+  res.headers = {} as Record<string, unknown>;
+  res.setHeader = jest.fn((n: string, v: unknown) => {
+    res.headers[n] = v;
+  });
+  res.resume();
+  return res;
+};
+
 // uuid@14 is ESM-only; the controller specs never assert on keys.
 jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
@@ -32,7 +46,11 @@ describe('UploadController (HTTP)', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+<<<<<<< Updated upstream
   it('requires a JWT on every upload route (none is @Public; the gateway reaches us over RMQ)', () => {
+=======
+  it('no upload route is @Public (JWT required)', () => {
+>>>>>>> Stashed changes
     const reflector = new Reflector();
     for (const handler of [
       UploadController.prototype.upload,
@@ -40,7 +58,11 @@ describe('UploadController (HTTP)', () => {
       UploadController.prototype.download,
       UploadController.prototype.delete,
     ]) {
+<<<<<<< Updated upstream
       expect(reflector.get<boolean>(IS_PUBLIC_KEY, handler)).toBeUndefined();
+=======
+      expect(reflector.get<boolean>(IS_PUBLIC_KEY, handler)).toBeFalsy();
+>>>>>>> Stashed changes
     }
   });
 
@@ -73,6 +95,7 @@ describe('UploadController (HTTP)', () => {
   });
 
   it('download streams the object with Content-Type, Content-Disposition and Content-Length', async () => {
+<<<<<<< Updated upstream
     service.download.mockResolvedValue({
       stream: Readable.from([Buffer.from('data')]),
       contentType: 'image/jpeg',
@@ -83,12 +106,22 @@ describe('UploadController (HTTP)', () => {
 
     await controller.download('uploads/photo.jpg', res as never);
     await finished;
+=======
+    const stream = Readable.from([Buffer.from('imgdata9')]);
+    service.download.mockResolvedValue({ stream, contentType: 'image/jpeg', contentLength: 9 });
+    const res = realRes();
+
+    await controller.download('uploads/photo.jpg', res as never);
+    await new Promise((r) => setTimeout(r, 10));
+>>>>>>> Stashed changes
 
     expect(res.headers).toEqual({
       'Content-Type': 'image/jpeg',
       'Content-Disposition': 'attachment; filename="photo.jpg"',
+      'X-Content-Type-Options': 'nosniff',
       'Content-Length': 9,
     });
+<<<<<<< Updated upstream
   });
 
   it('download sanitises the filename used in Content-Disposition', async () => {
@@ -102,10 +135,17 @@ describe('UploadController (HTTP)', () => {
 
   it('download omits Content-Length when R2 does not report it', async () => {
     const stream = Readable.from([]);
-    service.download.mockResolvedValue({ stream, contentType: 'application/pdf' });
-    const res = fakeRes();
+=======
+  });
 
-    await controller.download('k.pdf', res as never);
+  it('download omits Content-Length when R2 does not report it', async () => {
+    const stream = Readable.from([Buffer.from('x')]);
+>>>>>>> Stashed changes
+    service.download.mockResolvedValue({ stream, contentType: 'application/pdf' });
+    const res = realRes();
+
+    await controller.download('uploads/k.pdf', res as never);
+    await new Promise((r) => setTimeout(r, 10));
 
     expect(res.headers).not.toHaveProperty('Content-Length');
   });

@@ -4,6 +4,7 @@ import { NotificationService } from 'src/features/notification/notification.serv
 import type { NotificationRepository } from 'src/features/notification/notification.repository';
 
 const ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+const ADMIN = { userId: ID, role: 'ADMIN' };
 const OTHER = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 
 const dto = (overrides: Record<string, unknown> = {}) =>
@@ -30,19 +31,19 @@ describe('NotificationService', () => {
       repo.create.mockResolvedValue({ id: 'n1' });
       const input = dto({ userId: OTHER, classId: OTHER, studentId: OTHER });
 
-      await expect(service.createNotificationService(input)).resolves.toEqual({ id: 'n1' });
+      await expect(service.createNotificationService(input, 'ADMIN')).resolves.toEqual({ id: 'n1' });
       expect(repo.create).toHaveBeenCalledWith(input);
     });
 
     it('rejects a missing senderId with USER_ID_NOT_VALID and does not write', async () => {
-      await expect(service.createNotificationService(dto({ senderId: undefined }))).rejects.toMatchObject({
+      await expect(service.createNotificationService(dto({ senderId: undefined }), 'ADMIN')).rejects.toMatchObject({
         message: ERROR_MESSAGES.USER_ID_NOT_VALID,
       });
       expect(repo.create).not.toHaveBeenCalled();
     });
 
     it('rejects a malformed senderId', async () => {
-      await expect(service.createNotificationService(dto({ senderId: 'not-a-uuid' }))).rejects.toBeInstanceOf(
+      await expect(service.createNotificationService(dto({ senderId: 'not-a-uuid' }), 'ADMIN')).rejects.toBeInstanceOf(
         BadRequestException,
       );
       expect(repo.create).not.toHaveBeenCalled();
@@ -52,7 +53,7 @@ describe('NotificationService', () => {
       ['classId', ERROR_MESSAGES.CLASS_ID_NOT_VALID],
       ['studentId', ERROR_MESSAGES.STUDENT_ID_NOT_VALID],
     ])('rejects a malformed %s with its specific error code', async (field, code) => {
-      await expect(service.createNotificationService(dto({ [field]: '123' }))).rejects.toMatchObject({
+      await expect(service.createNotificationService(dto({ [field]: '123' }), 'ADMIN')).rejects.toMatchObject({
         message: code,
       });
       expect(repo.create).not.toHaveBeenCalled();
@@ -61,9 +62,30 @@ describe('NotificationService', () => {
     it('allows optional FK ids to be absent', async () => {
       repo.create.mockResolvedValue({ id: 'n2' });
 
-      await expect(service.createNotificationService(dto({ classId: null, studentId: undefined }))).resolves.toEqual({
+      await expect(service.createNotificationService(dto({ classId: null, studentId: undefined }), 'ADMIN')).resolves.toEqual({
         id: 'n2',
       });
+    });
+  });
+
+  describe('actor scoping', () => {
+    const student = { userId: ID, role: 'STUDENT' };
+    it('non-admin scopes by userId; ADMIN passes undefined', async () => {
+      repo.findById.mockResolvedValue({ id: ID });
+      repo.markAsRead.mockResolvedValue({ id: ID });
+      repo.delete.mockResolvedValue(true);
+      await service.findById(ID, student);
+      await service.markAsRead(ID, student);
+      await service.delete(ID, student);
+      expect(repo.findById).toHaveBeenLastCalledWith(ID, ID);
+      expect(repo.markAsRead).toHaveBeenLastCalledWith(ID, ID);
+      expect(repo.delete).toHaveBeenLastCalledWith(ID, ID);
+      await service.findById(ID, ADMIN);
+      expect(repo.findById).toHaveBeenLastCalledWith(ID, undefined);
+    });
+
+    it('undefined role is not creatable (403)', async () => {
+      await expect(service.createNotificationService(dto(), undefined)).rejects.toMatchObject({ status: 403 });
     });
   });
 
@@ -96,25 +118,25 @@ describe('NotificationService', () => {
     it('findById returns the row when it exists', async () => {
       repo.findById.mockResolvedValue({ id: ID });
 
-      await expect(service.findById(ID)).resolves.toEqual({ id: ID });
+      await expect(service.findById(ID, ADMIN)).resolves.toEqual({ id: ID });
     });
 
     it('findById throws NotFound when the row is missing', async () => {
       repo.findById.mockResolvedValue(null);
 
-      await expect(service.findById(ID)).rejects.toThrow(NotFoundException);
+      await expect(service.findById(ID, ADMIN)).rejects.toThrow(NotFoundException);
     });
 
     it('markAsRead returns the updated row', async () => {
       repo.markAsRead.mockResolvedValue({ id: ID, isRead: true });
 
-      await expect(service.markAsRead(ID)).resolves.toEqual({ id: ID, isRead: true });
+      await expect(service.markAsRead(ID, ADMIN)).resolves.toEqual({ id: ID, isRead: true });
     });
 
     it('markAsRead throws NotFound when no row matched', async () => {
       repo.markAsRead.mockResolvedValue(null);
 
-      await expect(service.markAsRead(ID)).rejects.toThrow(NotFoundException);
+      await expect(service.markAsRead(ID, ADMIN)).rejects.toThrow(NotFoundException);
     });
 
     it('markAllAsRead is scoped to the user and returns the repository result', async () => {
@@ -127,13 +149,13 @@ describe('NotificationService', () => {
     it('delete returns the id on success', async () => {
       repo.delete.mockResolvedValue(true);
 
-      await expect(service.delete(ID)).resolves.toEqual({ id: ID });
+      await expect(service.delete(ID, ADMIN)).resolves.toEqual({ id: ID });
     });
 
     it('delete throws NotFound when nothing was deleted', async () => {
       repo.delete.mockResolvedValue(false);
 
-      await expect(service.delete(ID)).rejects.toThrow(NotFoundException);
+      await expect(service.delete(ID, ADMIN)).rejects.toThrow(NotFoundException);
     });
   });
 });

@@ -10,6 +10,8 @@ type FakeClient = {
 const client = (over: Partial<FakeClient['handshake']> = {}): FakeClient => ({
   handshake: { auth: {}, headers: {}, ...over },
   disconnect: jest.fn(),
+  join: jest.fn(),
+  id: 'sock-1',
 });
 
 /** drizzle stand-in: `select().from().where().limit()` resolves to `rows`. */
@@ -90,13 +92,21 @@ describe('LogGateway', () => {
       expect(verify).toHaveBeenCalledWith('t', { secret: 'legacy-secret' });
     });
 
+<<<<<<< Updated upstream
     it('refuses the connection (no built-in fallback secret) when no secret is configured', async () => {
+=======
+    it('disconnects when no secret is configured (no hardcoded fallback)', async () => {
+>>>>>>> Stashed changes
       config = {};
       const { gateway } = build();
       const socket = client({ auth: { token: 't' } });
       await gateway.handleConnection(socket as never);
       expect(verify).not.toHaveBeenCalled();
+<<<<<<< Updated upstream
       expect(socket.disconnect).toHaveBeenCalled();
+=======
+      expect(socket.disconnect).toHaveBeenCalledTimes(1);
+>>>>>>> Stashed changes
     });
 
     it.each([
@@ -181,14 +191,16 @@ describe('LogGateway', () => {
   });
 
   describe('emitNewLog', () => {
-    it('broadcasts the row as log:new to every connected viewer', () => {
+    it('broadcasts the row as log:new to the admins room only', () => {
       const { gateway } = build();
       const emit = jest.fn();
-      gateway.server = { emit } as never;
+      const to = jest.fn(() => ({ emit }));
+      gateway.server = { to } as never;
       const row = { id: 'l1', path: '/classes' } as never;
 
       gateway.emitNewLog(row);
 
+      expect(to).toHaveBeenCalledWith('admins');
       expect(emit).toHaveBeenCalledTimes(1);
       expect(emit).toHaveBeenCalledWith('log:new', row);
     });

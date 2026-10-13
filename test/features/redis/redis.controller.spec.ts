@@ -17,8 +17,8 @@ describe('RedisController (HTTP)', () => {
   it('returns the stored value for an existing key', async () => {
     redis.get.mockResolvedValue('value');
 
-    await expect(controller.get('session:1')).resolves.toBe('value');
-    expect(redis.get).toHaveBeenCalledWith('session:1');
+    await expect(controller.get('cache:1')).resolves.toBe('value');
+    expect(redis.get).toHaveBeenCalledWith('cache:1');
   });
 
   it('returns null (not an error) for a missing key', async () => {

@@ -32,11 +32,14 @@ describe('NotificationRpcController', () => {
   });
 
   it('create forwards the DTO including senderId to the validated service path', async () => {
-    const dto = { type: 'SYSTEM', title: 't', content: 'c', senderId: 'u' };
+    const dto = { type: 'SYSTEM', title: 't', content: 'c', senderId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', role: 'ADMIN' };
     service.createNotificationService.mockResolvedValue({ id: 'n' });
 
     await expect(controller.create(dto as never)).resolves.toEqual({ id: 'n' });
-    expect(service.createNotificationService).toHaveBeenCalledWith(dto);
+    expect(service.createNotificationService).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 't', senderId: dto.senderId }),
+      'ADMIN',
+    );
   });
 
   it('getAll unpacks userId and query from the payload', async () => {
@@ -44,7 +47,7 @@ describe('NotificationRpcController', () => {
 
     await controller.getAll({ userId: 'u', query: { page: 1, limit: 10 } as never });
 
-    expect(service.findAll).toHaveBeenCalledWith('u', { page: 1, limit: 10 });
+    expect(service.findAll).toHaveBeenCalledWith('u', expect.objectContaining({ page: 1, limit: 10 }));
   });
 
   it('markAllAsRead, getById, markAsRead and del unpack their single field', async () => {
@@ -54,6 +57,7 @@ describe('NotificationRpcController', () => {
     service.delete.mockResolvedValue({ id: 'n' });
 
     await controller.markAllAsRead({ userId: 'u' });
+<<<<<<< Updated upstream
     await controller.getById({ id: 'n', userId: 'u' });
     await controller.markAsRead({ id: 'n', userId: 'u' });
     await controller.del({ id: 'n', userId: 'u' });
@@ -63,12 +67,28 @@ describe('NotificationRpcController', () => {
     expect(service.findById).toHaveBeenCalledWith('n', 'u');
     expect(service.markAsRead).toHaveBeenCalledWith('n', 'u');
     expect(service.delete).toHaveBeenCalledWith('n', 'u');
+=======
+    await controller.getById({ id: 'n', userId: 'u', role: 'STUDENT' });
+    await controller.markAsRead({ id: 'n', userId: 'u', role: 'STUDENT' });
+    await controller.del({ id: 'n', userId: 'u', role: 'STUDENT' });
+
+    expect(service.markAllAsRead).toHaveBeenCalledWith('u');
+    expect(service.findById).toHaveBeenCalledWith('n', { userId: 'u', role: 'STUDENT' });
+    expect(service.markAsRead).toHaveBeenCalledWith('n', { userId: 'u', role: 'STUDENT' });
+    expect(service.delete).toHaveBeenCalledWith('n', { userId: 'u', role: 'STUDENT' });
+>>>>>>> Stashed changes
   });
 
   it('propagates NotFound from the service so the RPC filter can translate it', async () => {
     const { NotFoundException } = await import('@nestjs/common');
     service.findById.mockRejectedValue(new NotFoundException('NOTIFICATION_NOT_FOUND'));
 
-    await expect(controller.getById({ id: 'missing' })).rejects.toBeInstanceOf(NotFoundException);
+    await expect(controller.getById({ id: 'missing', userId: 'u', role: 'STUDENT' })).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('getAll accepts a boolean isRead from the gateway', async () => {
+    service.findAll.mockResolvedValue({});
+    await controller.getAll({ userId: 'u', query: { isRead: true } } as never);
+    expect(service.findAll.mock.calls.at(-1)?.[1]).toMatchObject({ isRead: true, page: 1, limit: 10 });
   });
 });

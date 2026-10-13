@@ -13,15 +13,23 @@ function parsePositiveInt(raw: string | undefined, fallback: number): number {
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
+<<<<<<< Updated upstream
 /**
  * Access-token secret from env. Throws instead of falling back to a built-in constant: a public
  * fallback would let anyone mint a valid ADMIN token when the env var is missing.
  */
+=======
+/** Resolve the access-token secret; throws when none is configured (no insecure fallback). */
+>>>>>>> Stashed changes
 export function resolveJwtAccessSecret(configService: ConfigService): string {
   const secret =
     configService.get<string>('JWT_ACCESS_SECRET') || configService.get<string>('JWT_SECRET');
   if (!secret) {
+<<<<<<< Updated upstream
     throw new Error('JWT_ACCESS_SECRET (or JWT_SECRET) must be set');
+=======
+    throw new Error('Missing JWT secret: set JWT_ACCESS_SECRET (or JWT_SECRET) in the environment');
+>>>>>>> Stashed changes
   }
   return secret;
 }

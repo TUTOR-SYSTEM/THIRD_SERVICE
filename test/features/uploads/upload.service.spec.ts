@@ -1,3 +1,4 @@
+import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
@@ -132,16 +133,17 @@ describe('UploadService', () => {
       expect(result.size).toBe(buffer.length);
     });
 
-    it('falls back to the .bin extension when the original name has none', async () => {
+    it('rejects a file with no extension (not in whitelist) with 400', async () => {
       const { s3, send } = makeS3();
 
-      await new UploadService(s3, config).upload(file({ originalname: 'README', mimetype: 'application/octet-stream' }));
-
-      expect(send.mock.calls[0][0].input.Key).toMatch(/\.bin$/);
+      await expect(
+        new UploadService(s3, config).upload(file({ originalname: 'README', mimetype: 'application/octet-stream' })),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      expect(send).not.toHaveBeenCalled();
     });
 
-    it('rejects when no S3 client is configured', async () => {
-      await expect(new UploadService(null, config).upload(file({}))).rejects.toThrow('Cloudflare R2 not configured');
+    it('rejects with 503 when no S3 client is configured', async () => {
+      await expect(new UploadService(null, config).upload(file({}))).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
 
     it('propagates S3 write failures to the caller', async () => {
@@ -200,7 +202,7 @@ describe('UploadService', () => {
       const { s3, send } = makeS3();
       send.mockResolvedValue({ Body: {} });
 
-      const result = await new UploadService(s3, config).download('k');
+      const result = await new UploadService(s3, config).download('uploads/k.bin');
 
       expect(result.contentType).toBe('application/octet-stream');
       expect(result.contentLength).toBeUndefined();
@@ -210,11 +212,11 @@ describe('UploadService', () => {
       const { s3, send } = makeS3();
       send.mockRejectedValue(Object.assign(new Error('missing'), { name: 'NoSuchKey' }));
 
-      await expect(new UploadService(s3, config).download('gone')).rejects.toMatchObject({ name: 'NoSuchKey' });
+      await expect(new UploadService(s3, config).download('uploads/gone')).rejects.toMatchObject({ name: 'NoSuchKey' });
     });
 
     it('rejects when no S3 client is configured', async () => {
-      await expect(new UploadService(null, config).download('k')).rejects.toThrow('Cloudflare R2 not configured');
+      await expect(new UploadService(null, config).download('uploads/k')).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
   });
 
@@ -229,14 +231,14 @@ describe('UploadService', () => {
     });
 
     it('rejects when no S3 client is configured', async () => {
-      await expect(new UploadService(null, config).delete('k')).rejects.toThrow('Cloudflare R2 not configured');
+      await expect(new UploadService(null, config).delete('uploads/k')).rejects.toBeInstanceOf(ServiceUnavailableException);
     });
   });
 
   it('defaults the bucket to "tutor" when CLOUDFLARE_R2_BUCKET is unset', async () => {
     const { s3, send } = makeS3();
 
-    await new UploadService(s3, makeConfig({})).delete('k');
+    await new UploadService(s3, makeConfig({})).delete('uploads/k');
 
     expect(send.mock.calls[0][0].input.Bucket).toBe('tutor');
   });

@@ -7,7 +7,7 @@ import { NotificationController } from 'src/features/notification/notification.c
 import { NotificationService } from 'src/features/notification/notification.service';
 
 const USER_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
-const user = { id: USER_ID } as never;
+const user = { id: USER_ID, role: 'TUTOR' } as never;
 
 describe('NotificationController (HTTP)', () => {
   const service = {
@@ -73,6 +73,7 @@ describe('NotificationController (HTTP)', () => {
 
       expect(service.createNotificationService).toHaveBeenCalledWith(
         expect.objectContaining({ senderId: USER_ID }),
+        'TUTOR',
       );
     });
   });
@@ -112,9 +113,13 @@ describe('NotificationController (HTTP)', () => {
       service.markAsRead.mockResolvedValue({ id: 'n', isRead: true });
       service.delete.mockResolvedValue({ id: 'n' });
 
-      await expect(controller.findById('n')).resolves.toEqual({ id: 'n' });
-      await expect(controller.markAsRead('n')).resolves.toEqual({ id: 'n', isRead: true });
-      await expect(controller.delete('n')).resolves.toEqual({ id: 'n' });
+      await expect(controller.findById(user, 'n')).resolves.toEqual({ id: 'n' });
+      await expect(controller.markAsRead(user, 'n')).resolves.toEqual({ id: 'n', isRead: true });
+      await expect(controller.delete(user, 'n')).resolves.toEqual({ id: 'n' });
+      const actor = { userId: USER_ID, role: 'TUTOR' };
+      expect(service.findById).toHaveBeenCalledWith('n', actor);
+      expect(service.markAsRead).toHaveBeenCalledWith('n', actor);
+      expect(service.delete).toHaveBeenCalledWith('n', actor);
     });
 
     it('PATCH /read-all marks only the current user\'s notifications', async () => {

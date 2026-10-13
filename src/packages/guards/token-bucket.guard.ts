@@ -12,6 +12,7 @@ import type Redis from 'ioredis';
 import { RedisService } from '../../features/redis/redis.service';
 import { THROTTLE_KEY, type ThrottleOptions } from '@packages/decorators';
 
+const EVAL_TIMEOUT_MS = 500;
 const DEFAULT_THROTTLE: ThrottleOptions = { limit: 60, ttl: 60 };
 
 @Injectable()
@@ -39,6 +40,7 @@ export class TokenBucketGuard implements CanActivate {
     const maxTokens = options.limit;
     const refillPerSecond = maxTokens / options.ttl;
 
+<<<<<<< Updated upstream
     let bucket: number[];
     try {
       bucket = await this.evalBucket(key, maxTokens, refillPerSecond, now);
@@ -48,6 +50,19 @@ export class TokenBucketGuard implements CanActivate {
       return true;
     }
     const [allowed, remaining, limit, retryAfter] = bucket;
+=======
+    let allowed: number, remaining: number, limit: number, retryAfter: number;
+    try {
+      [allowed, remaining, limit, retryAfter] = await this.withTimeout(
+        this.evalBucket(key, maxTokens, refillPerSecond, now),
+        EVAL_TIMEOUT_MS,
+      );
+    } catch (error) {
+      // Fail open: a Redis outage must not take the API down with it.
+      this.logger.warn(`Rate limit skipped (redis unavailable): ${(error as Error).message}`);
+      return true;
+    }
+>>>>>>> Stashed changes
 
     request.res?.setHeader('X-RateLimit-Limit', limit);
     request.res?.setHeader('X-RateLimit-Remaining', Math.max(0, remaining));
@@ -65,11 +80,25 @@ export class TokenBucketGuard implements CanActivate {
   private buildKey(request: Request): string {
     const user = (request as unknown as Record<string, unknown>).user as
       { id?: string } | undefined;
+<<<<<<< Updated upstream
     const identifier = user?.id ?? request.ip ?? 'anonymous';
     // Route pattern (e.g. /notifications/:id), not the raw path, so random ids can't dodge the
     // limit or create unbounded Redis keys.
     const routePath = (request.route as { path?: string } | undefined)?.path ?? request.path;
     return `ratelimit:${identifier}:${request.method}:${routePath}`;
+=======
+    const routePath = (request.route as { path?: string } | undefined)?.path ?? request.path;
+    const identifier = user?.id ?? request.ip ?? 'anonymous';
+    return `ratelimit:${identifier}:${request.method}:${routePath}`;
+  }
+
+  private withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    let timer: NodeJS.Timeout;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`redis eval timed out after ${ms}ms`)), ms);
+    });
+    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+>>>>>>> Stashed changes
   }
 
   private async evalBucket(

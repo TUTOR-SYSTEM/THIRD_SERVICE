@@ -8,7 +8,7 @@ function fakeSelectDb(rows: unknown[]) {
   const chain: Record<string, unknown> = {
     then: (resolve: (v: unknown[]) => unknown) => resolve(rows),
   };
-  for (const method of ['from', 'where', 'groupBy', 'orderBy']) {
+  for (const method of ['from', 'where', 'groupBy', 'orderBy', 'limit']) {
     chain[method] = (...args: unknown[]) => {
       calls[method] = args;
       return chain;

@@ -16,6 +16,12 @@ export class RedisRpcController {
     return this.redisService.get(payload.key);
   }
 
+  // Existence only (never the value) — used by the gateway's session check.
+  @MessagePattern('redis.exists')
+  exists(@Payload() payload: { key: string }) {
+    return this.redisService.exists(payload.key);
+  }
+
   // Request-reply so callers can wait for the write to land (e.g. the reset-password token must
   // exist before the email goes out). The reply must be non-undefined or the RMQ client
   // completes empty and `RmqProducer.send()` treats it as a failure.

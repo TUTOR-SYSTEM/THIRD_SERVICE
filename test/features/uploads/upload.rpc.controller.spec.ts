@@ -73,7 +73,7 @@ describe('UploadRpcController', () => {
 
     const result = await controller.download({ key: 'uploads/2024/notes.txt' });
 
-    expect(result.content.toString()).toBe('hello');
+    expect(Buffer.from(result.buffer, 'base64').toString()).toBe('hello');
     expect(result.contentType).toBe('text/plain');
     expect(result.contentLength).toBe(5);
     expect(result.filename).toBe('notes.txt');
@@ -85,14 +85,25 @@ describe('UploadRpcController', () => {
       contentType: 'application/octet-stream',
     });
 
-    const result = await controller.download({ key: 'k' });
+    const result = await controller.download({ key: 'uploads/k' });
 
-    expect(Buffer.isBuffer(result.content)).toBe(true);
-    expect(result.content.toString()).toBe('hi');
+    expect(Buffer.from(result.buffer, 'base64').toString()).toBe('hi');
     expect(result.filename).toBe('k');
   });
 
+<<<<<<< Updated upstream
   it('download maps NoSuchKey from the service to a 404 NotFoundException', async () => {
+=======
+  it('rebuilds a Buffer from a base64 string payload (gateway format)', async () => {
+    service.upload.mockResolvedValue({ key: 'k' });
+    await controller.upload({
+      file: { originalname: 'a.txt', mimetype: 'text/plain', size: 3, buffer: Buffer.from('abc').toString('base64') } as never,
+    });
+    expect(service.upload.mock.calls[0][0].buffer.toString()).toBe('abc');
+  });
+
+  it('download propagates NoSuchKey from the service', async () => {
+>>>>>>> Stashed changes
     service.download.mockRejectedValue(Object.assign(new Error('gone'), { name: 'NoSuchKey' }));
 
     await expect(controller.download({ key: 'missing' })).rejects.toBeInstanceOf(NotFoundException);

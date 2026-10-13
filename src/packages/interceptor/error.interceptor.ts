@@ -7,6 +7,7 @@ import {
   Logger,
   NestInterceptor,
 } from '@nestjs/common';
+import { sanitizeLogMessage } from '../helpers/sanitize-log.helper';
 import { catchError, Observable, throwError } from 'rxjs';
 
 @Injectable()
@@ -41,7 +42,9 @@ export class ErrorInterceptor implements NestInterceptor {
         }
 
         const isError = error instanceof Error;
-        const originalMessage = isError ? error.message : 'Internal server error';
+        const originalMessage = isError
+          ? sanitizeLogMessage(error.message)
+          : 'Internal server error';
         const originalStack = isError ? error.stack : undefined;
 
         this.logger.error(originalMessage, originalStack);

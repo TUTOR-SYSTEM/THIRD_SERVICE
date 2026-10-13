@@ -8,7 +8,14 @@ export const testScenarioCategorySchema = z.enum([
   'domain',
 ]);
 
-export const testAuthProfileSchema = z.enum(['caller', 'admin', 'tutor', 'student', 'parent', 'none']);
+export const testAuthProfileSchema = z.enum([
+  'caller',
+  'admin',
+  'tutor',
+  'student',
+  'parent',
+  'none',
+]);
 
 /** Request fired at the gateway. Path, header values and body strings may contain `{{variables}}`
  * (`{{accessToken}}`, `{{token.<role>}}`, `{{fixture.<key>}}`, `{{uuid}}`, …). */
@@ -91,4 +98,30 @@ export const generateTestScenariosSchema = z.object({
 /** `POST /test-scenarios/bulk`: save many cases at once (duplicates are skipped). */
 export const bulkCreateTestScenariosSchema = z.object({
   scenarios: z.array(createTestScenarioSchema).min(1).max(500),
+});
+
+/** RPC payload wrappers (`testscenario.update|delete|runs|run|fixtures.*`). */
+const idSchema = z.string().min(1);
+export const idPayloadSchema = z.object({ id: idSchema });
+export const updateTestScenarioPayloadSchema = z.object({
+  id: idSchema,
+  dto: updateTestScenarioSchema,
+});
+export const updateTestFixturePayloadSchema = z.object({
+  id: idSchema,
+  dto: updateTestFixtureSchema,
+});
+export const runsPayloadSchema = z.object({
+  id: idSchema,
+  limit: z.number().int().min(1).max(100).optional(),
+});
+export const runTestScenarioPayloadSchema = z.object({
+  id: idSchema,
+  userId: z.string().optional(),
+  accessToken: z.string().optional(),
+  wait: z.boolean().optional(),
+});
+export const resolveFixturePayloadSchema = z.object({
+  id: idSchema,
+  accessToken: z.string().optional(),
 });

@@ -1,5 +1,9 @@
 import { NotFoundException, BadRequestException } from '@nestjs/common';
+<<<<<<< Updated upstream
 import { Readable, Writable } from 'stream';
+=======
+import { PassThrough, Readable } from 'stream';
+>>>>>>> Stashed changes
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UploadController } from 'src/features/uploads/upload.controller';
@@ -18,12 +22,19 @@ describe('UploadController.download — branches', () => {
   });
 
   it('omits Content-Length when the object size is unknown', async () => {
+<<<<<<< Updated upstream
     service.download.mockResolvedValue({ stream: Readable.from([]), contentType: 'text/plain' });
     const res = Object.assign(new Writable({ write: (_c, _e, cb) => cb() }), {
       setHeader: jest.fn(),
     });
+=======
+    service.download.mockResolvedValue({ stream: Readable.from([Buffer.from('x')]), contentType: 'text/plain' });
+    const res = Object.assign(new PassThrough(), { setHeader: jest.fn() });
+    res.resume();
+>>>>>>> Stashed changes
 
-    await controller.download('a/b.txt', res as never);
+    await controller.download('uploads/b.txt', res as never);
+    await new Promise((r) => setTimeout(r, 10));
 
     expect(res.setHeader).not.toHaveBeenCalledWith('Content-Length', expect.anything());
   });
@@ -53,9 +64,9 @@ describe('UploadRpcController.download — chunk types', () => {
     };
     const controller = new UploadRpcController(service as unknown as UploadService);
 
-    const out = await controller.download({ key: 'dir/file.bin' });
+    const out = await controller.download({ key: 'uploads/dir/file.bin' });
 
-    expect(out.content).toEqual(Buffer.from([1, 2, 3]));
+    expect(Buffer.from(out.buffer, 'base64')).toEqual(Buffer.from([1, 2, 3]));
     expect(out.filename).toBe('file.bin');
   });
 });

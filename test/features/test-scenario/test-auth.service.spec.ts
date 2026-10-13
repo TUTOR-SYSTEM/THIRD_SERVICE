@@ -19,7 +19,7 @@ describe('TestAuthService', () => {
 
   it('reports configured profiles with the email only', () => {
     const statuses = new TestAuthService().statuses();
-    expect(statuses).toContainEqual({ profile: 'student', configured: true, email: 'student@x.dev' });
+    expect(statuses).toContainEqual({ profile: 'student', configured: true, email: 's******@x.dev' });
     expect(statuses).toContainEqual({ profile: 'tutor', configured: false, email: null });
     expect(JSON.stringify(statuses)).not.toContain('pa:ss');
   });
@@ -96,7 +96,7 @@ describe('TestAuthService — full case matrix', () => {
 
     it('splits on the first colon so passwords may contain colons', () => {
       const status = new TestAuthService().statuses().find((s) => s.profile === 'student');
-      expect(status).toEqual({ profile: 'student', configured: true, email: 'student@x.dev' });
+      expect(status).toEqual({ profile: 'student', configured: true, email: 's******@x.dev' });
     });
 
     it('reports every account profile, in order', () => {
@@ -152,7 +152,7 @@ describe('TestAuthService — full case matrix', () => {
     it('fails with the profile name and env var when the body is not JSON', async () => {
       fetchMock.mockResolvedValue({ ok: false, status: 502, json: () => Promise.reject(new SyntaxError('x')) });
       await expect(new TestAuthService().accountToken('student')).rejects.toThrow(
-        'Login for auth profile "student" (student@x.dev) returned 502 — check TEST_ACCOUNT_STUDENT',
+        'Login for auth profile "student" returned 502 — check TEST_ACCOUNT_STUDENT',
       );
     });
 

@@ -2,6 +2,7 @@ import { EmailController } from 'src/features/email/email.controller';
 import { EmailService } from 'src/features/email/email.service';
 import { EmailRpcController } from 'src/features/email/email.rpc.controller';
 import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
+import { ROLES_KEY } from '@packages/decorators/roles.decorator';
 import { Reflector } from '@nestjs/core';
 
 describe('EmailController / EmailRpcController', () => {
@@ -12,13 +13,24 @@ describe('EmailController / EmailRpcController', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
+<<<<<<< Updated upstream
   it('does not mark the HTTP test endpoint as public (it sends a real email)', () => {
+=======
+  it('requires the ADMIN role and is no longer public', () => {
+>>>>>>> Stashed changes
     const reflector = new Reflector();
     const isPublic = reflector.get<boolean>(
       IS_PUBLIC_KEY,
       EmailController.prototype.testSendEmailController,
     );
+<<<<<<< Updated upstream
     expect(isPublic).toBeUndefined();
+=======
+    expect(isPublic).toBeFalsy();
+    expect(reflector.get(ROLES_KEY, EmailController.prototype.testSendEmailController)).toEqual([
+      'ADMIN',
+    ]);
+>>>>>>> Stashed changes
   });
 
   it('HTTP GET /emails delegates to testSendEmailService and returns its result', async () => {

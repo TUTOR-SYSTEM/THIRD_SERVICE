@@ -1,6 +1,7 @@
-import { Controller } from '@nestjs/common';
+import { BadRequestException, Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
-import type { CreateRequestLogDto, GetRequestLogsQueryDto } from '@packages/entities/log';
+import type { CreateRequestLogDto } from '@packages/entities/log';
+import { getRequestLogsQuerySchema } from '@packages/entities/log';
 import { LogService } from './log.service';
 
 /**
@@ -20,8 +21,12 @@ export class LogRpcController {
   }
 
   @MessagePattern('log.query')
-  query(@Payload() query: GetRequestLogsQueryDto) {
-    return this.logService.findAll(query);
+  query(@Payload() payload: unknown) {
+    const result = getRequestLogsQuerySchema.safeParse(payload ?? {});
+    if (!result.success) {
+      throw new BadRequestException(result.error.issues.map((i) => i.message).join('; '));
+    }
+    return this.logService.findAll(result.data);
   }
 
   @MessagePattern('log.trace')

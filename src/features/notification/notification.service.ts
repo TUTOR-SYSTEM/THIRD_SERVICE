@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable, Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ERROR_MESSAGES } from 'src/data/constants';
 import type {
   CreateNotificationDto,
@@ -6,6 +11,16 @@ import type {
 } from '@packages/entities/notification';
 import { NotificationRepository } from './notification.repository';
 import { checkUuidValid } from '@packages/helpers';
+
+export type NotificationActor = { userId: string; role?: string };
+
+/** Notification types each non-admin role may create. ADMIN may create all; others none. */
+const CREATABLE_TYPES_BY_ROLE: Record<string, readonly string[]> = {
+  TUTOR: ['TUTOR', 'STUDENT'],
+};
+
+/** ADMIN is not restricted to the caller's own rows. */
+const scopeUserId = (actor: NotificationActor) => (actor.role === 'ADMIN' ? undefined : actor.userId);
 
 @Injectable()
 export class NotificationService {
@@ -23,6 +38,7 @@ export class NotificationService {
     }
   }
 
+<<<<<<< Updated upstream
   private assertUuid(id: string): void {
     if (!id || !checkUuidValid({ data: id })) {
       throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
@@ -30,6 +46,13 @@ export class NotificationService {
   }
 
   async createNotificationService(dto: CreateNotificationDto) {
+=======
+  async createNotificationService(dto: CreateNotificationDto, role?: string) {
+    if (role !== 'ADMIN' && !CREATABLE_TYPES_BY_ROLE[role ?? '']?.includes(dto.type)) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+
+>>>>>>> Stashed changes
     if (!dto.senderId || (dto.senderId && !checkUuidValid({ data: dto.senderId }))) {
       throw new BadRequestException(ERROR_MESSAGES.USER_ID_NOT_VALID);
     }
@@ -48,17 +71,27 @@ export class NotificationService {
     return this.repo.findAll(userId, query);
   }
 
+<<<<<<< Updated upstream
   /** `userId` scopes the lookup to rows the caller received or sent (404 otherwise). */
   async findById(id: string, userId?: string) {
     this.assertUuid(id);
     const note = await this.repo.findById(id, userId);
+=======
+  async findById(id: string, actor: NotificationActor) {
+    const note = await this.repo.findById(id, scopeUserId(actor));
+>>>>>>> Stashed changes
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
 
+<<<<<<< Updated upstream
   async markAsRead(id: string, userId?: string) {
     this.assertUuid(id);
     const note = await this.repo.markAsRead(id, userId);
+=======
+  async markAsRead(id: string, actor: NotificationActor) {
+    const note = await this.repo.markAsRead(id, scopeUserId(actor));
+>>>>>>> Stashed changes
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
@@ -67,9 +100,14 @@ export class NotificationService {
     return this.repo.markAllAsRead(userId);
   }
 
+<<<<<<< Updated upstream
   async delete(id: string, userId?: string) {
     this.assertUuid(id);
     const deleted = await this.repo.delete(id, userId);
+=======
+  async delete(id: string, actor: NotificationActor) {
+    const deleted = await this.repo.delete(id, scopeUserId(actor));
+>>>>>>> Stashed changes
     if (!deleted) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return { id };
   }

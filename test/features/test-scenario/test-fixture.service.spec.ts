@@ -112,7 +112,7 @@ describe('TestFixtureService — full case matrix', () => {
 
   describe('CRUD', () => {
     it('findAll delegates to the repository', async () => {
-      await expect(service.findAll()).resolves.toEqual([fixed]);
+      await expect(service.findAll()).resolves.toEqual([{ ...fixed, value: null, hasValue: fixed.value != null }]);
       expect(repo.findAll).toHaveBeenCalledTimes(1);
     });
 

@@ -43,7 +43,8 @@ export function serviceForPath(path: string): string {
 
 function singular(word: string): string {
   if (word.endsWith('ies')) return `${word.slice(0, -3)}y`;
-  if (word.endsWith('sses') || word.endsWith('ches') || word.endsWith('shes')) return word.slice(0, -2);
+  if (word.endsWith('sses') || word.endsWith('ches') || word.endsWith('shes'))
+    return word.slice(0, -2);
   if (word.endsWith('s') && !word.endsWith('ss')) return word.slice(0, -1);
   return word;
 }
@@ -63,7 +64,9 @@ type ParamMode = 'fixture' | 'unknown';
 function fillPath(route: RouteInfoDto, mode: ParamMode, invalidParam?: string): string {
   return route.path.replace(/:(\w+)/g, (_, param: string) => {
     if (param === invalidParam) return 'not-a-uuid';
-    return mode === 'fixture' ? `{{fixture.${fixtureKeyFor(route.path, param)}}}` : '{{unknownUuid}}';
+    return mode === 'fixture'
+      ? `{{fixture.${fixtureKeyFor(route.path, param)}}}`
+      : '{{unknownUuid}}';
   });
 }
 
@@ -131,7 +134,9 @@ export function sampleFromSchema(raw: JsonSchema): unknown {
     case 'object': {
       const properties = (schema.properties ?? {}) as Record<string, JsonSchema>;
       const required = (schema.required ?? []) as string[];
-      return Object.fromEntries(required.map((key) => [key, sampleFromSchema(properties[key] ?? {})]));
+      return Object.fromEntries(
+        required.map((key) => [key, sampleFromSchema(properties[key] ?? {})]),
+      );
     }
     case 'null':
       return null;
@@ -236,7 +241,10 @@ export function generateForRoute(
     add('auth', 'Không có token', 401, path, { authProfile: 'none' });
     add('auth', 'Token không hợp lệ', 401, path, {
       authProfile: 'none',
-      requestTemplate: { headers: { authorization: INVALID_TOKEN }, ...(writeBody !== undefined ? { body: writeBody } : {}) },
+      requestTemplate: {
+        headers: { authorization: INVALID_TOKEN },
+        ...(writeBody !== undefined ? { body: writeBody } : {}),
+      },
     });
     if (route.roles) {
       for (const [role, roleProfile] of Object.entries(ROLE_PROFILES)) {
@@ -276,7 +284,12 @@ export function generateForRoute(
       for (const [field, schema] of Object.entries(properties).slice(0, MAX_TYPE_CASES)) {
         const wrong = wrongQueryValueFor(schema);
         if (wrong === undefined) continue;
-        add('validation', `Query ${field} sai`, 422, `${path}?${field}=${encodeURIComponent(wrong)}`);
+        add(
+          'validation',
+          `Query ${field} sai`,
+          422,
+          `${path}?${field}=${encodeURIComponent(wrong)}`,
+        );
       }
     }
   }
@@ -304,12 +317,19 @@ export function suggestFixtures(
 
   return [...keys].map(([key, routePath]) => {
     const segments = routePath.split('/');
-    const param = segments.findIndex((s) => s.startsWith(':') && fixtureKeyFor(routePath, s.slice(1)) === key);
+    const param = segments.findIndex(
+      (s) => s.startsWith(':') && fixtureKeyFor(routePath, s.slice(1)) === key,
+    );
     const listPath = param > 0 ? segments.slice(0, param).join('/') : null;
     const collection = listPath?.split('/').pop();
     const suggestion: FixtureResolverDto | null =
       listPath && collection && getPaths.has(listPath)
-        ? { method: 'GET', path: listPath, authProfile: 'admin', extract: `data.${camel(collection)}.0.id` }
+        ? {
+            method: 'GET',
+            path: listPath,
+            authProfile: 'admin',
+            extract: `data.${camel(collection)}.0.id`,
+          }
         : null;
     return { key, suggestion };
   });

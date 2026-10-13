@@ -25,10 +25,9 @@ export class AppController {
   }
 
   @MessagePattern('health.redis')
-  async checkRedisHealth(@Payload() payload?: { fetchData?: boolean }): Promise<unknown> {
-    this.logger.log('[HEALTH] Checking Redis connection and cache data');
+  async checkRedisHealth(@Payload() _payload?: { fetchData?: boolean }): Promise<unknown> {
+    this.logger.log('[HEALTH] Checking Redis connection');
     try {
-      const shouldFetchData = payload?.fetchData ?? false;
       const client = this.redisService.client;
       const [pong, info, dbsize] = await Promise.all([
         client.ping(),
@@ -36,7 +35,8 @@ export class AppController {
         client.dbsize(),
       ]);
 
-      const stats: Record<string, unknown> = {
+      // Never return key names or values — counts and memory info only.
+      return {
         status: 'healthy',
         cache: 'Redis',
         connection: 'connected',
@@ -45,22 +45,9 @@ export class AppController {
         ping: pong,
         stats: {
           totalKeys: dbsize,
-          info: info.split('\r\n').slice(0, 5).join(', '), // Sample of info
+          info: info.split('\r\n').slice(0, 5).join(', '),
         },
       };
-
-      if (shouldFetchData) {
-        // SCAN (not KEYS) so a large keyspace never blocks Redis; first 10 keys only.
-        const [, sampleKeys] = await client.scan(0, 'COUNT', 100);
-        const keys = sampleKeys.slice(0, 10);
-        if (keys.length > 0) {
-          const values = await client.mget(keys);
-          stats['sampleKeys'] = Object.fromEntries(keys.map((k, i) => [k, values[i] ?? null]));
-        }
-      }
-
-      this.logger.log('[HEALTH] Redis connection OK, cache data retrieved');
-      return stats;
     } catch (error) {
       this.logger.error(`[HEALTH] Redis connection failed: ${error}`);
       return {
@@ -68,7 +55,7 @@ export class AppController {
         cache: 'Redis',
         connection: 'failed',
         timestamp: new Date().toISOString(),
-        message: error instanceof Error ? error.message : 'Redis connection failed',
+        message: 'Redis unavailable',
       };
     }
   }
