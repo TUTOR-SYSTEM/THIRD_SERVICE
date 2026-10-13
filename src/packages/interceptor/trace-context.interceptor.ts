@@ -20,27 +20,6 @@ export function resolveServiceHost(): string {
 }
 
 const MAX_LOG_LENGTH = 1000;
-<<<<<<< Updated upstream
-const SENSITIVE_KEYS = [
-  'password',
-  'newPassword',
-  'oldPassword',
-  'confirmPassword',
-  'token',
-  'accessToken',
-  'refreshToken',
-  'resetToken',
-  'value',
-  'secret',
-  'authorization',
-];
-
-/** Patterns whose payload/response carry credentials (sessions, reset tokens) — body never logged. */
-const BODYLESS_PATTERN_PREFIXES = ['log.', 'redis.', 'email.'];
-
-function redact(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redact);
-=======
 const MAX_STRING_LENGTH = 2000;
 const MAX_ARRAY_ITEMS = 20;
 const MAX_OBJECT_KEYS = 50;
@@ -55,6 +34,8 @@ const SENSITIVE_KEYS = new Set(
     'accessToken',
     'refreshToken',
     'resetToken',
+    // reset-password JWT id: the reset token itself is valid for 5 minutes (TRD3-11).
+    'jti',
     'value',
     'secret',
     'code',
@@ -74,7 +55,6 @@ function binarySize(value: unknown): number | undefined {
   if (typeof value === 'string') return value.length;
   if (Array.isArray(value)) return value.length;
   if (Buffer.isBuffer(value) || value instanceof Uint8Array) return value.length;
->>>>>>> Stashed changes
   if (value !== null && typeof value === 'object') {
     const data = (value as { data?: unknown }).data;
     if (Array.isArray(data)) return data.length;
@@ -219,13 +199,8 @@ export class TraceContextInterceptor implements NestInterceptor {
     this.logger.log(`[RPC] ${pattern} <- ${trace}`);
     // Don't log the logging plumbing itself as a request row.
     const isLogPattern = pattern.startsWith('log.');
-<<<<<<< Updated upstream
-    const isBodyless = BODYLESS_PATTERN_PREFIXES.some((prefix) => pattern.startsWith(prefix));
-    const requestBody = isBodyless ? undefined : previewPayload(context);
-=======
     const omitBodies = isLogPattern || isOmittedPattern(pattern);
     const requestBody = omitBodies ? undefined : previewPayload(context);
->>>>>>> Stashed changes
 
     return new Observable((subscriber) => {
       let responseData: unknown;
@@ -270,11 +245,7 @@ export class TraceContextInterceptor implements NestInterceptor {
                   parentTraceId,
                   requestBody,
                   host: resolveServiceHost(),
-<<<<<<< Updated upstream
-                  responseBody: isBodyless ? undefined : previewResponse(responseData),
-=======
                   responseBody: omitBodies ? undefined : previewResponse(responseData),
->>>>>>> Stashed changes
                 });
               }
               subscriber.complete();

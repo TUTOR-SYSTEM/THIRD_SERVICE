@@ -12,7 +12,6 @@ import { eq } from 'drizzle-orm';
 import type { JwtUserRole } from '@packages/helpers';
 import { resolveJwtAccessSecret } from '../configs/jwt-sign.config';
 import { users } from '../../database/schema';
-import { resolveJwtAccessSecret } from '../configs/jwt-sign.config';
 
 /** Access-token payload shape (matches access JWTs from `signAccessToken`). */
 export type JwtGuardUser = {

@@ -1,10 +1,7 @@
 export const S3_CLIENT = 'S3_CLIENT';
 export const UPLOAD_DIR = 'uploads';
-<<<<<<< Updated upstream
-/** Per-file cap enforced by Multer (HTTP) and by `UploadService.upload` (RPC path). */
-export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-=======
 
+/** Per-file cap enforced by Multer (HTTP) and by `UploadService.upload` (RPC path). */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_UPLOAD_FILES = 10;
 export const UPLOAD_KEY_PREFIX = `${UPLOAD_DIR}/`;
@@ -36,4 +33,3 @@ export const BLOCKED_MIMETYPES: ReadonlySet<string> = new Set([
   'application/javascript',
   'application/x-javascript',
 ]);
->>>>>>> Stashed changes

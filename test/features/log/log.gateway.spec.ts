@@ -92,21 +92,13 @@ describe('LogGateway', () => {
       expect(verify).toHaveBeenCalledWith('t', { secret: 'legacy-secret' });
     });
 
-<<<<<<< Updated upstream
-    it('refuses the connection (no built-in fallback secret) when no secret is configured', async () => {
-=======
     it('disconnects when no secret is configured (no hardcoded fallback)', async () => {
->>>>>>> Stashed changes
       config = {};
       const { gateway } = build();
       const socket = client({ auth: { token: 't' } });
       await gateway.handleConnection(socket as never);
       expect(verify).not.toHaveBeenCalled();
-<<<<<<< Updated upstream
-      expect(socket.disconnect).toHaveBeenCalled();
-=======
       expect(socket.disconnect).toHaveBeenCalledTimes(1);
->>>>>>> Stashed changes
     });
 
     it.each([

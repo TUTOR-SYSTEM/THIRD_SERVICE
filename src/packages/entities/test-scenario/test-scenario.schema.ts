@@ -86,12 +86,34 @@ export const createTestFixtureSchema = z
   .refine((f) => f.value != null || f.resolver != null, 'a fixture needs a value or a resolver');
 export const updateTestFixtureSchema = z.object(fixtureFields).partial();
 
-/** `POST /test-scenarios/generate`: which routes (default: all) and which kinds of case. */
+/**
+ * One gateway route as `listHttpRoutes` describes it (`RouteInfoDto`). Every field the generator
+ * reads must be declared here: `ZodValidationPipe` returns the parsed value, so undeclared keys
+ * are stripped and the generator would see `undefined` (e.g. `uuidParams`). Optional-on-input
+ * fields get defaults so the parsed type matches `RouteInfoDto` exactly.
+ */
+const routeInfoSchema = z.object({
+  method: z.string().min(1),
+  path: z.string().min(1),
+  summary: z.string().nullable().default(null),
+  tag: z.string().nullable().default(null),
+  params: z.array(z.string()).default([]),
+  uuidParams: z.array(z.string()).default([]),
+  isPublic: z.boolean().default(false),
+  roles: z.array(z.string()).nullable().default(null),
+  bodySchema: z.record(z.string(), z.unknown()).nullable().default(null),
+  querySchema: z.record(z.string(), z.unknown()).nullable().default(null),
+  multipart: z.boolean().default(false),
+  oauth: z.boolean().default(false),
+});
+
+/**
+ * `testscenario.generate` payload (RPC only, from the gateway): which routes (default: none
+ * given → empty), the full route list used to look up fixture resolvers, and the case kinds.
+ */
 export const generateTestScenariosSchema = z.object({
-  routes: z
-    .array(z.object({ method: z.string().min(1), path: z.string().min(1) }))
-    .max(500)
-    .optional(),
+  routes: z.array(routeInfoSchema).max(500).optional(),
+  listRoutes: z.array(routeInfoSchema).max(5000).optional(),
   categories: z.array(testScenarioCategorySchema).min(1).optional(),
 });
 

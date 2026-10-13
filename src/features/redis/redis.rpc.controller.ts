@@ -1,4 +1,4 @@
-import { Controller } from '@nestjs/common';
+import { BadRequestException, Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { RedisService } from './redis.service';
 
@@ -33,6 +33,9 @@ export class RedisRpcController {
 
   @EventPattern('redis.del')
   del(@Payload() payload: { keys: string[] }) {
+    if (!Array.isArray(payload?.keys) || payload.keys.some((k) => typeof k !== 'string' || !k)) {
+      throw new BadRequestException('keys must be an array of non-empty strings');
+    }
     return this.redisService.del(...payload.keys);
   }
 }

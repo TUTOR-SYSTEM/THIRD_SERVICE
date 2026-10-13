@@ -143,12 +143,8 @@ export class TestScenarioService {
   async generate(
     dto: GenerateScenariosDto,
   ): Promise<{ scenarios: GeneratedScenarioDto[]; fixtures: FixtureSuggestionDto[] }> {
-<<<<<<< Updated upstream
     const routes = dto.routes ?? [];
     const proposals = routes.flatMap((route) => generateForRoute(route, dto.categories));
-=======
-    const proposals = dto.routes.flatMap((route) => generateForRoute(route, dto.categories));
->>>>>>> Stashed changes
     const [existing, fixtures] = await Promise.all([
       this.repo.existingKeys(),
       this.fixtures.findAll(),

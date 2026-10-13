@@ -1,6 +1,3 @@
-<<<<<<< Updated upstream
-import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
-=======
 import {
   BadRequestException,
   Inject,
@@ -9,7 +6,6 @@ import {
   OnModuleInit,
   ServiceUnavailableException,
 } from '@nestjs/common';
->>>>>>> Stashed changes
 import { ConfigService } from '@nestjs/config';
 import {
   S3Client,
@@ -20,9 +16,6 @@ import {
 import type { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
-<<<<<<< Updated upstream
-import { MAX_UPLOAD_BYTES, S3_CLIENT } from './upload.constant';
-=======
 import {
   BLOCKED_MIMETYPES,
   DOCUMENT_CONTENT_TYPES,
@@ -31,7 +24,6 @@ import {
   S3_CLIENT,
   UPLOAD_KEY_PREFIX,
 } from './upload.constant';
->>>>>>> Stashed changes
 import type { MulterFile, UploadResponse } from './upload.interface';
 
 @Injectable()
@@ -86,15 +78,10 @@ export class UploadService implements OnModuleInit {
   }
 
   async upload(file: MulterFile, folder = 'uploads'): Promise<UploadResponse> {
-<<<<<<< Updated upstream
-    if (!this.s3) throw new Error('Cloudflare R2 not configured');
-    if (!file?.buffer || !file.mimetype) throw new BadRequestException('file is required');
-    if (file.buffer.length > MAX_UPLOAD_BYTES) {
-      throw new BadRequestException(`File exceeds ${MAX_UPLOAD_BYTES} bytes`);
-    }
-    const isImage = file.mimetype.startsWith('image/');
-=======
     const s3 = this.requireS3();
+    if (!file) {
+      throw new BadRequestException('file is required');
+    }
     const size = file.buffer?.length ?? 0;
     if (size === 0 || size > MAX_UPLOAD_BYTES) {
       throw new BadRequestException(
@@ -102,7 +89,6 @@ export class UploadService implements OnModuleInit {
       );
     }
     const mimetype = (file.mimetype ?? '').toLowerCase();
->>>>>>> Stashed changes
     const dot = file.originalname.lastIndexOf('.');
     const originalExt = dot >= 0 ? file.originalname.slice(dot + 1).toLowerCase() : '';
     const isImage = IMAGE_EXTENSIONS.has(originalExt);
@@ -125,12 +111,8 @@ export class UploadService implements OnModuleInit {
           .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 80, mozjpeg: true })
           .toBuffer();
-<<<<<<< Updated upstream
-      } catch {
-=======
       } catch (err) {
         this.logger.warn(`Image decode failed: ${(err as Error).message}`);
->>>>>>> Stashed changes
         throw new BadRequestException('Invalid image file');
       }
     }

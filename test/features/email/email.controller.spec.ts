@@ -13,24 +13,16 @@ describe('EmailController / EmailRpcController', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-<<<<<<< Updated upstream
-  it('does not mark the HTTP test endpoint as public (it sends a real email)', () => {
-=======
   it('requires the ADMIN role and is no longer public', () => {
->>>>>>> Stashed changes
     const reflector = new Reflector();
     const isPublic = reflector.get<boolean>(
       IS_PUBLIC_KEY,
       EmailController.prototype.testSendEmailController,
     );
-<<<<<<< Updated upstream
-    expect(isPublic).toBeUndefined();
-=======
     expect(isPublic).toBeFalsy();
     expect(reflector.get(ROLES_KEY, EmailController.prototype.testSendEmailController)).toEqual([
       'ADMIN',
     ]);
->>>>>>> Stashed changes
   });
 
   it('HTTP GET /emails delegates to testSendEmailService and returns its result', async () => {

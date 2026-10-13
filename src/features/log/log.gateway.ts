@@ -13,7 +13,6 @@ import { Server, Socket } from 'socket.io';
 import { DRIZZLE } from '../../database/database.module';
 import { resolveJwtAccessSecret } from '../../packages/configs/jwt-sign.config';
 import { requestLogs, users } from '../../database/schema';
-import { resolveJwtAccessSecret } from '../../packages/configs/jwt-sign.config';
 import { resolveCorsOrigins } from '../../packages/helpers/cors.helper';
 
 type RequestLogRow = typeof requestLogs.$inferSelect;

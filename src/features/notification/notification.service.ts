@@ -38,21 +38,17 @@ export class NotificationService {
     }
   }
 
-<<<<<<< Updated upstream
   private assertUuid(id: string): void {
     if (!id || !checkUuidValid({ data: id })) {
       throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     }
   }
 
-  async createNotificationService(dto: CreateNotificationDto) {
-=======
   async createNotificationService(dto: CreateNotificationDto, role?: string) {
     if (role !== 'ADMIN' && !CREATABLE_TYPES_BY_ROLE[role ?? '']?.includes(dto.type)) {
       throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
     }
 
->>>>>>> Stashed changes
     if (!dto.senderId || (dto.senderId && !checkUuidValid({ data: dto.senderId }))) {
       throw new BadRequestException(ERROR_MESSAGES.USER_ID_NOT_VALID);
     }
@@ -71,27 +67,16 @@ export class NotificationService {
     return this.repo.findAll(userId, query);
   }
 
-<<<<<<< Updated upstream
-  /** `userId` scopes the lookup to rows the caller received or sent (404 otherwise). */
-  async findById(id: string, userId?: string) {
-    this.assertUuid(id);
-    const note = await this.repo.findById(id, userId);
-=======
   async findById(id: string, actor: NotificationActor) {
+    this.assertUuid(id);
     const note = await this.repo.findById(id, scopeUserId(actor));
->>>>>>> Stashed changes
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
 
-<<<<<<< Updated upstream
-  async markAsRead(id: string, userId?: string) {
-    this.assertUuid(id);
-    const note = await this.repo.markAsRead(id, userId);
-=======
   async markAsRead(id: string, actor: NotificationActor) {
+    this.assertUuid(id);
     const note = await this.repo.markAsRead(id, scopeUserId(actor));
->>>>>>> Stashed changes
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
@@ -100,14 +85,9 @@ export class NotificationService {
     return this.repo.markAllAsRead(userId);
   }
 
-<<<<<<< Updated upstream
-  async delete(id: string, userId?: string) {
-    this.assertUuid(id);
-    const deleted = await this.repo.delete(id, userId);
-=======
   async delete(id: string, actor: NotificationActor) {
+    this.assertUuid(id);
     const deleted = await this.repo.delete(id, scopeUserId(actor));
->>>>>>> Stashed changes
     if (!deleted) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return { id };
   }

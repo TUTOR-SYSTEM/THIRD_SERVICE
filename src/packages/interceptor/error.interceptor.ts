@@ -1,5 +1,7 @@
 import {
+  BadRequestException,
   CallHandler,
+  ConflictException,
   ExecutionContext,
   HttpException,
   Injectable,
@@ -34,11 +36,41 @@ export class ErrorInterceptor implements NestInterceptor {
     return message.startsWith('Failed query:') ? 'Database error' : message;
   }
 
+  /**
+   * Client-caused Postgres constraint violations are 400/409, not 500: a bad FK reference or
+   * missing required field is the caller's input problem. Returns undefined for anything else.
+   */
+  private mapConstraintToHttp(error: unknown): HttpException | undefined {
+    const pgCode = this.pgCodeOf(error);
+    const message = this.resolveClientMessage(error);
+    switch (pgCode) {
+      case '23503':
+      case '23502':
+      case '23514':
+        return new BadRequestException(message);
+      case '23505':
+        return new ConflictException(message);
+      default:
+        return undefined;
+    }
+  }
+
+  private pgCodeOf(error: unknown): string | undefined {
+    if (typeof error !== 'object' || error === null) return undefined;
+    const e = error as Record<string, unknown>;
+    return (e.code ?? (e.cause as Record<string, unknown> | undefined)?.code) as string | undefined;
+  }
+
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
     return next.handle().pipe(
       catchError((error: unknown) => {
         if (error instanceof HttpException) {
           return throwError(() => error);
+        }
+
+        const mapped = this.mapConstraintToHttp(error);
+        if (mapped) {
+          return throwError(() => mapped);
         }
 
         const isError = error instanceof Error;

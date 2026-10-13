@@ -81,11 +81,7 @@ export class NotificationController {
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @SwaggerResponse({ status: 200, description: 'Notification detail' })
   async findById(@CurrentUser() user: JwtGuardUser, @Param('id') id: string) {
-<<<<<<< Updated upstream
-    return this.notificationService.findById(id, user.id);
-=======
     return this.notificationService.findById(id, { userId: user.id, role: user.role });
->>>>>>> Stashed changes
   }
 
   @Patch(':id/read')
@@ -94,11 +90,7 @@ export class NotificationController {
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @SwaggerResponse({ status: 200, description: 'Marked as read' })
   async markAsRead(@CurrentUser() user: JwtGuardUser, @Param('id') id: string) {
-<<<<<<< Updated upstream
-    return this.notificationService.markAsRead(id, user.id);
-=======
     return this.notificationService.markAsRead(id, { userId: user.id, role: user.role });
->>>>>>> Stashed changes
   }
 
   @Patch('read-all')
@@ -118,10 +110,6 @@ export class NotificationController {
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
   @SwaggerResponse({ status: 200, description: 'Notification deleted' })
   async delete(@CurrentUser() user: JwtGuardUser, @Param('id') id: string) {
-<<<<<<< Updated upstream
-    return this.notificationService.delete(id, user.id);
-=======
     return this.notificationService.delete(id, { userId: user.id, role: user.role });
->>>>>>> Stashed changes
   }
 }

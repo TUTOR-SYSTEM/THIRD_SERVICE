@@ -57,17 +57,6 @@ describe('NotificationRpcController', () => {
     service.delete.mockResolvedValue({ id: 'n' });
 
     await controller.markAllAsRead({ userId: 'u' });
-<<<<<<< Updated upstream
-    await controller.getById({ id: 'n', userId: 'u' });
-    await controller.markAsRead({ id: 'n', userId: 'u' });
-    await controller.del({ id: 'n', userId: 'u' });
-
-    expect(service.markAllAsRead).toHaveBeenCalledWith('u');
-    // userId is forwarded so the service can scope the row to its owner (IDOR guard).
-    expect(service.findById).toHaveBeenCalledWith('n', 'u');
-    expect(service.markAsRead).toHaveBeenCalledWith('n', 'u');
-    expect(service.delete).toHaveBeenCalledWith('n', 'u');
-=======
     await controller.getById({ id: 'n', userId: 'u', role: 'STUDENT' });
     await controller.markAsRead({ id: 'n', userId: 'u', role: 'STUDENT' });
     await controller.del({ id: 'n', userId: 'u', role: 'STUDENT' });
@@ -76,7 +65,6 @@ describe('NotificationRpcController', () => {
     expect(service.findById).toHaveBeenCalledWith('n', { userId: 'u', role: 'STUDENT' });
     expect(service.markAsRead).toHaveBeenCalledWith('n', { userId: 'u', role: 'STUDENT' });
     expect(service.delete).toHaveBeenCalledWith('n', { userId: 'u', role: 'STUDENT' });
->>>>>>> Stashed changes
   });
 
   it('propagates NotFound from the service so the RPC filter can translate it', async () => {

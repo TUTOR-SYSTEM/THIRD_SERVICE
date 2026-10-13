@@ -75,11 +75,7 @@ describe('JwtAuthGuard', () => {
     );
   });
 
-<<<<<<< Updated upstream
   it('verifies with JWT_ACCESS_SECRET, falls back to JWT_SECRET, and throws when neither is set', async () => {
-=======
-  it('verifies with JWT_ACCESS_SECRET and falls back to JWT_SECRET, and rejects when none is set', async () => {
->>>>>>> Stashed changes
     await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
     expect(jwt.verify).toHaveBeenLastCalledWith('t', { secret: 'access-secret' });
 
@@ -90,13 +86,9 @@ describe('JwtAuthGuard', () => {
     // No built-in fallback: a public constant would let anyone mint a valid ADMIN token.
     config.get.mockReturnValue(undefined);
     jwt.verify.mockClear();
-<<<<<<< Updated upstream
     await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
       'JWT_ACCESS_SECRET',
     );
-=======
-    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toBeDefined();
->>>>>>> Stashed changes
     expect(jwt.verify).not.toHaveBeenCalled();
   });
 

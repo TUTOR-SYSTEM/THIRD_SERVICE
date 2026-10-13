@@ -1,4 +1,4 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Readable } from 'stream';
 import { PATTERN_METADATA } from '@nestjs/microservices/constants';
 import { UploadRpcController } from 'src/features/uploads/upload.rpc.controller';
@@ -91,19 +91,20 @@ describe('UploadRpcController', () => {
     expect(result.filename).toBe('k');
   });
 
-<<<<<<< Updated upstream
-  it('download maps NoSuchKey from the service to a 404 NotFoundException', async () => {
-=======
   it('rebuilds a Buffer from a base64 string payload (gateway format)', async () => {
     service.upload.mockResolvedValue({ key: 'k' });
     await controller.upload({
-      file: { originalname: 'a.txt', mimetype: 'text/plain', size: 3, buffer: Buffer.from('abc').toString('base64') } as never,
+      file: {
+        originalname: 'a.txt',
+        mimetype: 'text/plain',
+        size: 3,
+        buffer: Buffer.from('abc').toString('base64'),
+      } as never,
     });
     expect(service.upload.mock.calls[0][0].buffer.toString()).toBe('abc');
   });
 
-  it('download propagates NoSuchKey from the service', async () => {
->>>>>>> Stashed changes
+  it('download maps NoSuchKey from the service to a 404 NotFoundException', async () => {
     service.download.mockRejectedValue(Object.assign(new Error('gone'), { name: 'NoSuchKey' }));
 
     await expect(controller.download({ key: 'missing' })).rejects.toBeInstanceOf(NotFoundException);
@@ -121,11 +122,24 @@ describe('UploadRpcController', () => {
     expect(service.upload).not.toHaveBeenCalled();
   });
 
-  it('delete forwards the key and returns the service result', async () => {
+  it('delete forwards the key for an ADMIN and replies { ok, key } (never an empty reply)', async () => {
     service.delete.mockResolvedValue(undefined);
 
-    await controller.del({ key: 'uploads/x.jpg' });
+    await expect(controller.del({ key: 'uploads/x.jpg', role: 'ADMIN' })).resolves.toEqual({
+      ok: true,
+      key: 'uploads/x.jpg',
+    });
 
     expect(service.delete).toHaveBeenCalledWith('uploads/x.jpg');
+  });
+
+  it('delete rejects a non-ADMIN or missing role without touching R2 (TRD3-05)', async () => {
+    await expect(controller.del({ key: 'uploads/x.jpg', role: 'STUDENT' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    await expect(controller.del({ key: 'uploads/x.jpg' })).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(service.delete).not.toHaveBeenCalled();
   });
 });

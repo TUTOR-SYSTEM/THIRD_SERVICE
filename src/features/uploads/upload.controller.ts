@@ -27,11 +27,8 @@ import {
   ApiResponse as SwaggerResponse,
 } from '@nestjs/swagger';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-<<<<<<< Updated upstream
-=======
 import { Roles } from '@packages/decorators';
 import { RolesGuard } from '@packages/guards';
->>>>>>> Stashed changes
 import { StatusCodes } from 'http-status-codes';
 import { MAX_UPLOAD_FILES } from './upload.constant';
 import { UploadService } from './upload.service';
@@ -104,11 +101,6 @@ export class UploadController {
       res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
       res.setHeader('X-Content-Type-Options', 'nosniff');
       if (contentLength !== undefined) res.setHeader('Content-Length', contentLength);
-<<<<<<< Updated upstream
-      // `pipeline` forwards stream errors and destroys both ends, so a mid-transfer R2 failure
-      // or a client disconnect can't surface as an uncaught 'error' event.
-      pipeline(stream, res, () => undefined);
-=======
       // pipeline destroys both ends on error or premature client close (no S3 connection leak / unhandled 'error').
       pipeline(stream, res, (pipeErr) => {
         if (pipeErr) {
@@ -116,7 +108,6 @@ export class UploadController {
           if (!res.destroyed) res.destroy();
         }
       });
->>>>>>> Stashed changes
     } catch (err: unknown) {
       const e = err as { name?: string };
       if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
@@ -126,11 +117,8 @@ export class UploadController {
     }
   }
 
-<<<<<<< Updated upstream
-=======
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
->>>>>>> Stashed changes
   @Delete(':key')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Delete file' })

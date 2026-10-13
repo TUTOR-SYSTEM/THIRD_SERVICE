@@ -14,11 +14,16 @@ import { AppModule } from './app.module';
 import { ResponseInterceptor } from '@packages/interceptor/response.interceptor';
 import { ErrorInterceptor, LoggerInterceptor } from '@packages/interceptor';
 import { HttpExceptionFilter, RpcExceptionFilter } from '@packages/filters';
-import { TraceContextInterceptor } from '@packages/interceptor';
+import { RmqAckInterceptor, TraceContextInterceptor } from '@packages/interceptor';
 import { setLogSink } from '@packages/context/log-sink';
 import { LogService } from './features/log/log.service';
 
 async function bootstrap() {
+  // Fail fast in production: the guest/guest fallback below is for local dev only.
+  if (process.env.NODE_ENV === 'production' && !process.env.RABBITMQ_URL?.trim()) {
+    throw new Error('RABBITMQ_URL is required when NODE_ENV=production');
+  }
+
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
@@ -53,9 +58,12 @@ async function bootstrap() {
     {
       transport: Transport.RMQ,
       options: {
-        urls: [process.env.RABBITMQ_URL ?? 'amqp://guest:guest@localhost:5672'],
+        urls: [process.env.RABBITMQ_URL?.trim() || 'amqp://guest:guest@localhost:5672'],
         queue: process.env.THIRD_QUEUE ?? 'third_queue',
         queueOptions: { durable: true },
+        // Manual ack (see RmqAckInterceptor): messages stay unacked until the handler finishes,
+        // so prefetchCount bounds in-flight work instead of being ignored under auto-ack.
+        noAck: false,
         prefetchCount: 10,
       },
     },
@@ -68,7 +76,8 @@ async function bootstrap() {
   rmqMicroservice.useGlobalFilters(new RpcExceptionFilter());
   // Opens the correlationId/traceId/serviceName RequestContext for every @MessagePattern
   // handler — see [[rmq-rpc-plumbing]] memory.
-  rmqMicroservice.useGlobalInterceptors(new TraceContextInterceptor());
+  // Ack interceptor is outermost so it also sees failures raised by TraceContextInterceptor.
+  rmqMicroservice.useGlobalInterceptors(new RmqAckInterceptor(), new TraceContextInterceptor());
 
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()

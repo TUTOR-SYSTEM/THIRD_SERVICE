@@ -1,15 +1,9 @@
 import { BadRequestException, Controller } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
-<<<<<<< Updated upstream
-import type {
-  CreateNotificationDto,
-  GetNotificationsQueryDto,
-=======
 import { z } from 'zod';
 import {
   createNotificationSchema,
   getNotificationsQuerySchema,
->>>>>>> Stashed changes
 } from '@packages/entities/notification';
 import { NotificationService } from './notification.service';
 
@@ -20,9 +14,12 @@ const actorSchema = z.object({
 });
 const getAllSchema = z.object({
   userId: z.string().min(1),
-  query: getNotificationsQuerySchema.optional().default(() => getNotificationsQuerySchema.parse({})),
+  query: getNotificationsQuerySchema
+    .optional()
+    .default(() => getNotificationsQuerySchema.parse({})),
 });
 const createPayloadSchema = z.object({ role: z.string().optional() });
+const markAllSchema = z.object({ userId: z.string().min(1) });
 
 function parse<T extends z.ZodType>(schema: T, data: unknown): z.infer<T> {
   const result = schema.safeParse(data ?? {});
@@ -55,25 +52,12 @@ export class NotificationRpcController {
   }
 
   @MessagePattern('notification.markAllAsRead')
-  markAllAsRead(@Payload() payload: { userId: string }) {
-    return this.notificationService.markAllAsRead(payload.userId);
+  markAllAsRead(@Payload() payload: unknown) {
+    const { userId } = parse(markAllSchema, payload);
+    return this.notificationService.markAllAsRead(userId);
   }
 
   @MessagePattern('notification.getById')
-<<<<<<< Updated upstream
-  getById(@Payload() payload: { id: string; userId?: string }) {
-    return this.notificationService.findById(payload.id, payload.userId);
-  }
-
-  @MessagePattern('notification.markAsRead')
-  markAsRead(@Payload() payload: { id: string; userId?: string }) {
-    return this.notificationService.markAsRead(payload.id, payload.userId);
-  }
-
-  @MessagePattern('notification.delete')
-  del(@Payload() payload: { id: string; userId?: string }) {
-    return this.notificationService.delete(payload.id, payload.userId);
-=======
   getById(@Payload() payload: unknown) {
     const { id, userId, role } = parse(actorSchema, payload);
     return this.notificationService.findById(id, { userId, role });
@@ -89,6 +73,5 @@ export class NotificationRpcController {
   del(@Payload() payload: unknown) {
     const { id, userId, role } = parse(actorSchema, payload);
     return this.notificationService.delete(id, { userId, role });
->>>>>>> Stashed changes
   }
 }

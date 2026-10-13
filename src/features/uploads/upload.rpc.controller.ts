@@ -1,9 +1,11 @@
-<<<<<<< Updated upstream
-import { BadRequestException, Controller, NotFoundException } from '@nestjs/common';
-=======
-import { BadRequestException, Controller } from '@nestjs/common';
->>>>>>> Stashed changes
+import {
+  BadRequestException,
+  Controller,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
+import { ERROR_MESSAGES } from 'src/data/constants';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from './upload.constant';
 import { UploadService } from './upload.service';
 import type { MulterFile, UploadResponse } from './upload.interface';
@@ -36,16 +38,10 @@ export class UploadRpcController {
 
   @MessagePattern('upload.uploadMultiple')
   async uploadMultiple(@Payload() payload: { files: UploadRpcFile[] }): Promise<UploadResponse[]> {
-<<<<<<< Updated upstream
-    return this.uploadService.uploadMultiple(
-      (payload.files ?? []).map((file) => this.reconstruct(file)),
-    );
-=======
     if (!Array.isArray(payload.files) || payload.files.length > MAX_UPLOAD_FILES) {
       throw new BadRequestException(`At most ${MAX_UPLOAD_FILES} files are allowed`);
     }
     return this.uploadService.uploadMultiple(payload.files.map((file) => this.reconstruct(file)));
->>>>>>> Stashed changes
   }
 
   @MessagePattern('upload.download')
@@ -77,15 +73,22 @@ export class UploadRpcController {
     };
   }
 
+  /**
+   * ADMIN only (mirrors the HTTP `DELETE /upload/:key` RolesGuard). The gateway forwards the
+   * caller's `role`; a missing or non-ADMIN role is rejected (fail closed). Replies `{ ok, key }`
+   * so the caller never sees an empty reply after a successful delete.
+   */
   @MessagePattern('upload.delete')
-  async del(@Payload() payload: { key: string }) {
-    return this.uploadService.delete(payload.key);
+  async del(@Payload() payload: { key: string; role?: string }) {
+    if (payload?.role !== 'ADMIN') {
+      throw new ForbiddenException(ERROR_MESSAGES.ADMIN_ROLE_REQUIRED);
+    }
+    await this.uploadService.delete(payload.key);
+    return { ok: true, key: payload.key };
   }
 
   private reconstruct(file: UploadRpcFile): MulterFile {
-<<<<<<< Updated upstream
-    if (!file?.buffer?.data) throw new BadRequestException('file is required');
-=======
+    if (!file?.buffer) throw new BadRequestException('file is required');
     const buffer =
       typeof file.buffer === 'string'
         ? Buffer.from(file.buffer, 'base64')
@@ -93,7 +96,6 @@ export class UploadRpcController {
     if (buffer.length > MAX_UPLOAD_BYTES) {
       throw new BadRequestException(`File exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024}MB limit`);
     }
->>>>>>> Stashed changes
     return {
       fieldname: file.fieldname ?? 'file',
       originalname: file.originalname,

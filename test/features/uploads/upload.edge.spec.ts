@@ -58,29 +58,15 @@ describe('UploadService — key and mimetype edge cases', () => {
 describe('UploadController — access control metadata', () => {
   const isPublic = (handler: object) => Reflect.getMetadata(IS_PUBLIC_KEY, handler) === true;
 
-<<<<<<< Updated upstream
   it('POST /upload requires authentication', () => {
     expect(isPublic(UploadController.prototype.upload)).toBe(false);
     expect(isPublic(UploadController.prototype.uploadMultiple)).toBe(false);
   });
 
-=======
-  it('upload routes are not @Public (JWT required)', () => {
-    expect(isPublic(UploadController.prototype.upload)).toBe(false);
-  });
-
-  // SECURITY (expected to fail): DELETE /upload/:key is @Public, so anyone who can reach the
-  // service can delete any object in the R2 bucket without a JWT.
->>>>>>> Stashed changes
   it('DELETE /upload/:key requires authentication', () => {
     expect(isPublic(UploadController.prototype.delete)).toBe(false);
   });
 
-<<<<<<< Updated upstream
-=======
-  // SECURITY (expected to fail): GET /upload/download is @Public and streams any object key
-  // the caller names, so private uploads are readable without a JWT.
->>>>>>> Stashed changes
   it('GET /upload/download requires authentication', () => {
     expect(isPublic(UploadController.prototype.download)).toBe(false);
   });

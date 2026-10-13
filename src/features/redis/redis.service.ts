@@ -14,15 +14,10 @@ const connectionOptions = {
   connectTimeout: 10_000,
   /** true (mặc định ioredis): lệnh chờ socket ready; false + lazyConnect dễ lỗi trước khi connect xong */
   enableOfflineQueue: true,
-<<<<<<< Updated upstream
-  /** Giảm MaxRetriesPerRequestError khi đang reconnect so với mặc định 3 */
-  maxRetriesPerRequest: null,
-  /** Rejects a command (even one parked in the offline queue) after 5s so a dead Redis can't hang callers. */
-  commandTimeout: 5_000,
-=======
   /** Hữu hạn (không null) để lệnh fail nhanh khi Redis down thay vì treo vô hạn */
   maxRetriesPerRequest: 3,
->>>>>>> Stashed changes
+  /** Rejects a command (even one parked in the offline queue) after 5s so a dead Redis can't hang callers. */
+  commandTimeout: 5_000,
 } as const satisfies Pick<
   RedisOptions,
   | 'lazyConnect'
@@ -106,6 +101,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   async exists(key: string): Promise<boolean> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
     return (await this.client.exists(key)) > 0;
   }
 

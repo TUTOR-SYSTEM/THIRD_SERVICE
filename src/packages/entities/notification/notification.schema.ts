@@ -36,11 +36,7 @@ export const getNotificationsQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(10),
   search: z.string().trim().min(1).optional(),
   type: notificationTypeEnum.optional(),
-<<<<<<< Updated upstream
-  // z.coerce.boolean() would turn the string "false" into true, so parse it explicitly.
-=======
   // Accepts the raw query string ('true'/'false') and an already-parsed boolean (gateway -> RPC).
->>>>>>> Stashed changes
   isRead: z
     .union([z.boolean(), z.enum(['true', 'false']).transform((v) => v === 'true')])
     .optional(),

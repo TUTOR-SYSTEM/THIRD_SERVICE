@@ -12,6 +12,7 @@ const SENSITIVE_KEYS = new Set(
     'accessToken',
     'refreshToken',
     'resetToken',
+    'jti',
     'secret',
     'authorization',
     'cookie',
