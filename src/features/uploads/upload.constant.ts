@@ -3,7 +3,16 @@ export const UPLOAD_DIR = 'uploads';
 
 /** Per-file cap enforced by Multer (HTTP) and by `UploadService.upload` (RPC path). */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
-export const MAX_UPLOAD_FILES = 10;
+/** Files per multipart / RPC batch request (contract C5). */
+export const MAX_UPLOAD_FILES = 5;
+/** Per-user quota: files uploaded per rolling minute (fixed window, shared across instances via Redis). */
+export const UPLOAD_FILES_PER_MINUTE = 30;
+/** Lifetime of a presigned download URL handed out over RPC. */
+export const PRESIGNED_DOWNLOAD_TTL_SECONDS = 300;
+/** S3 object metadata key holding the uploader's user id (used for download ownership). */
+export const OWNER_METADATA_KEY = 'owner-id';
+/** Roles allowed to upload (contract C5: STUDENT/PARENT are rejected). */
+export const UPLOADER_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'TUTOR']);
 export const UPLOAD_KEY_PREFIX = `${UPLOAD_DIR}/`;
 
 /** Images are decoded and re-encoded to JPEG by sharp, so the stored object is always image/jpeg. */

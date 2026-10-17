@@ -1,8 +1,13 @@
 import { BadRequestException, Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
+import { z } from 'zod';
 import type { CreateRequestLogDto } from '@packages/entities/log';
 import { getRequestLogsQuerySchema } from '@packages/entities/log';
 import { LogService } from './log.service';
+
+const traceSchema = z.object({
+  correlationId: z.string().trim().min(1, 'correlationId is required').max(100),
+});
 
 /**
  * Reached by every service's `RmqProducer` — `log.create` is fired with `.emit()`
@@ -30,8 +35,12 @@ export class LogRpcController {
   }
 
   @MessagePattern('log.trace')
-  trace(@Payload() payload: { correlationId: string }) {
-    return this.logService.findByCorrelationId(payload.correlationId);
+  trace(@Payload() payload: unknown) {
+    const result = traceSchema.safeParse(payload ?? {});
+    if (!result.success) {
+      throw new BadRequestException(result.error.issues.map((i) => i.message).join('; '));
+    }
+    return this.logService.findByCorrelationId(result.data.correlationId);
   }
 
   @MessagePattern('log.stats')

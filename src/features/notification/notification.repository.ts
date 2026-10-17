@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, ilike, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { DRIZZLE } from '../../database/database.module';
-import { notifications } from '../../database/schema';
+import { classes, classStudents, notifications } from '../../database/schema';
 import { escapeLike } from '@packages/helpers';
 import type {
   CreateNotificationDto,
@@ -37,13 +37,64 @@ export class NotificationRepository {
     return note;
   }
 
+  /** Inserts one row per recipient so each user has their own read state. */
+  async createMany(rows: CreateNotificationDto[]) {
+    if (rows.length === 0) return [];
+    return this.db
+      .insert(notifications)
+      .values(
+        rows.map((data) => ({
+          type: data.type,
+          title: data.title,
+          content: data.content,
+          subContent: data.subContent ?? undefined,
+          userId: data.userId ?? undefined,
+          senderId: data.senderId ?? undefined,
+          classId: data.classId ?? undefined,
+          studentId: data.studentId ?? undefined,
+          redirectUrl: data.redirectUrl ?? undefined,
+          actionLabel: data.actionLabel ?? undefined,
+          actionType: data.actionType ?? undefined,
+          metadata: data.metadata ?? undefined,
+        })),
+      )
+      .returning();
+  }
+
+  /** True when the class exists and is taught by `tutorId`. */
+  async tutorOwnsClass(classId: string, tutorId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(and(eq(classes.id, classId), eq(classes.tutorId, tutorId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  /** True when `studentId` is enrolled in at least one class taught by `tutorId`. */
+  async tutorTeachesStudent(studentId: string, tutorId: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: classStudents.id })
+      .from(classStudents)
+      .innerJoin(classes, eq(classes.id, classStudents.classId))
+      .where(and(eq(classStudents.studentId, studentId), eq(classes.tutorId, tutorId)))
+      .limit(1);
+    return rows.length > 0;
+  }
+
+  async studentIdsOfClass(classId: string): Promise<string[]> {
+    const rows = await this.db
+      .select({ studentId: classStudents.studentId })
+      .from(classStudents)
+      .where(eq(classStudents.classId, classId));
+    return rows.map((r) => r.studentId);
+  }
+
   async findAll(userId: string, query: GetNotificationsQueryDto) {
     const { page, limit, search, type, isRead } = query;
     const offset = (page - 1) * limit;
 
-    const conditions: SQL[] = [
-      or(eq(notifications.userId, userId), eq(notifications.senderId, userId))!,
-    ];
+    const conditions: SQL[] = [this.visibleTo(userId)];
 
     if (search) {
       conditions.push(ilike(notifications.title, `%${escapeLike(search)}%`));
@@ -79,13 +130,10 @@ export class NotificationRepository {
     };
   }
 
-  /** `userId` set => only rows the user received or sent; omitted (ADMIN) => unrestricted. */
+  /** `userId` set => rows the user received, plus unaddressed rows they sent; omitted (ADMIN) => unrestricted. */
   async findById(id: string, userId?: string) {
     const where = userId
-      ? and(
-          eq(notifications.id, id),
-          or(eq(notifications.userId, userId), eq(notifications.senderId, userId)),
-        )
+      ? and(eq(notifications.id, id), this.visibleTo(userId))
       : eq(notifications.id, id);
     const [note] = await this.db.select().from(notifications).where(where);
     return note ?? null;
@@ -120,6 +168,18 @@ export class NotificationRepository {
   async delete(id: string, userId?: string) {
     const [note] = await this.db.delete(notifications).where(this.ownedBy(id, userId)).returning();
     return !!note;
+  }
+
+  /**
+   * Received rows, plus rows the caller sent that have no recipient. Rows addressed to someone else
+   * are owned by that recipient (a broadcast is stored once per recipient), so they are not listed
+   * again under the sender.
+   */
+  private visibleTo(userId: string) {
+    return or(
+      eq(notifications.userId, userId),
+      and(eq(notifications.senderId, userId), isNull(notifications.userId)),
+    )!;
   }
 
   private ownedBy(id: string, userId?: string) {

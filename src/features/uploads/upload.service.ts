@@ -1,10 +1,15 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   OnModuleInit,
+  Optional,
   ServiceUnavailableException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
@@ -12,19 +17,33 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  HeadObjectCommand,
+  type HeadObjectCommandOutput,
 } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Readable } from 'stream';
 import { v4 as uuidv4 } from 'uuid';
 import sharp from 'sharp';
+import { ERROR_MESSAGES } from 'src/data/constants';
+import { RedisService } from '../redis/redis.service';
 import {
   BLOCKED_MIMETYPES,
   DOCUMENT_CONTENT_TYPES,
   IMAGE_EXTENSIONS,
   MAX_UPLOAD_BYTES,
+  OWNER_METADATA_KEY,
+  PRESIGNED_DOWNLOAD_TTL_SECONDS,
   S3_CLIENT,
+  UPLOAD_FILES_PER_MINUTE,
   UPLOAD_KEY_PREFIX,
+  UPLOADER_ROLES,
 } from './upload.constant';
-import type { MulterFile, UploadResponse } from './upload.interface';
+import type {
+  MulterFile,
+  PresignedDownload,
+  UploadActor,
+  UploadResponse,
+} from './upload.interface';
 
 @Injectable()
 export class UploadService implements OnModuleInit {
@@ -35,6 +54,7 @@ export class UploadService implements OnModuleInit {
     @Inject(S3_CLIENT)
     private readonly s3: S3Client | null,
     private readonly configService: ConfigService,
+    @Optional() private readonly redisService?: RedisService,
   ) {
     this.bucket = this.configService.get<string>('CLOUDFLARE_R2_BUCKET', 'tutor');
   }
@@ -77,7 +97,42 @@ export class UploadService implements OnModuleInit {
     }
   }
 
-  async upload(file: MulterFile, folder = 'uploads'): Promise<UploadResponse> {
+  /** Only ADMIN and TUTOR may upload (contract C5). Fail closed on a missing role. */
+  assertUploaderRole(role: string | undefined): void {
+    if (!role || !UPLOADER_ROLES.has(role)) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+  }
+
+  /**
+   * Per-user fixed-window quota (files per minute), kept in Redis so it holds across instances.
+   * Fails open when Redis is not wired or unreachable: the rate limit is best-effort, the
+   * per-request cap (MAX_UPLOAD_FILES) still applies.
+   */
+  async consumeUploadQuota(userId: string, fileCount: number): Promise<void> {
+    if (!this.redisService || fileCount <= 0) return;
+    const window = Math.floor(Date.now() / 60_000);
+    const key = `upload-rate:${userId}:${window}`;
+    let used: number;
+    try {
+      used = await this.redisService.client.incrby(key, fileCount);
+      if (used === fileCount) {
+        await this.redisService.client.expire(key, 120);
+      }
+    } catch (err) {
+      this.logger.warn(`Upload quota unavailable, failing open: ${(err as Error).message}`);
+      return;
+    }
+    if (used > UPLOAD_FILES_PER_MINUTE) {
+      throw new HttpException(ERROR_MESSAGES.UPLOAD_RATE_LIMITED, HttpStatus.TOO_MANY_REQUESTS);
+    }
+  }
+
+  /**
+   * `ownerId` is stored as S3 object metadata and decides who may download the object later
+   * (see `assertDownloadable`). Callers pass the authenticated user, never a client value.
+   */
+  async upload(file: MulterFile, folder = 'uploads', ownerId?: string): Promise<UploadResponse> {
     const s3 = this.requireS3();
     if (!file) {
       throw new BadRequestException('file is required');
@@ -124,6 +179,7 @@ export class UploadService implements OnModuleInit {
         Body: processedBuffer,
         ContentType: contentType,
         ...(isImage ? {} : { ContentDisposition: 'attachment' }),
+        ...(ownerId ? { Metadata: { [OWNER_METADATA_KEY]: ownerId } } : {}),
       }),
     );
 
@@ -134,6 +190,54 @@ export class UploadService implements OnModuleInit {
     const base = this.configService.get<string>('CLOUDFLARE_R2_PUBLIC_URL');
     if (!base) throw new ServiceUnavailableException('CLOUDFLARE_R2_PUBLIC_URL is not configured');
     return `${base.replace(/\/+$/, '')}/${key}`;
+  }
+
+  /**
+   * Ownership check for downloads: ADMIN may read anything; everyone else only the objects they
+   * uploaded (owner metadata). Objects without owner metadata are ADMIN-only. Returns the stored
+   * content type and a safe filename.
+   */
+  async assertDownloadable(
+    key: string,
+    actor: UploadActor,
+  ): Promise<{ contentType: string; contentLength?: number; filename: string }> {
+    this.assertValidKey(key);
+    const s3 = this.requireS3();
+    let head: HeadObjectCommandOutput;
+    try {
+      head = await s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (err) {
+      const e = err as { name?: string };
+      if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
+        throw new NotFoundException(ERROR_MESSAGES.FILE_NOT_FOUND);
+      }
+      throw err;
+    }
+    const owner = head.Metadata?.[OWNER_METADATA_KEY];
+    if (actor.role !== 'ADMIN' && (!owner || owner !== actor.userId)) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+    return {
+      contentType: head.ContentType ?? 'application/octet-stream',
+      contentLength: head.ContentLength,
+      filename: this.safeFilename(key),
+    };
+  }
+
+  /** Short-lived signed GET URL for the object, issued only after `assertDownloadable` passes. */
+  async presignDownload(key: string, actor: UploadActor): Promise<PresignedDownload> {
+    const { contentType, filename } = await this.assertDownloadable(key, actor);
+    const s3 = this.requireS3();
+    const url = await getSignedUrl(
+      s3,
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        ResponseContentDisposition: `attachment; filename="${filename}"`,
+      }),
+      { expiresIn: PRESIGNED_DOWNLOAD_TTL_SECONDS },
+    );
+    return { url, expiresIn: PRESIGNED_DOWNLOAD_TTL_SECONDS, contentType, filename };
   }
 
   async download(
@@ -155,11 +259,15 @@ export class UploadService implements OnModuleInit {
     await s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 
-  async uploadMultiple(files: MulterFile[], folder = 'uploads'): Promise<UploadResponse[]> {
+  async uploadMultiple(
+    files: MulterFile[],
+    folder = 'uploads',
+    ownerId?: string,
+  ): Promise<UploadResponse[]> {
     if (!Array.isArray(files) || files.length === 0) {
       throw new BadRequestException('files is required');
     }
-    const results = await Promise.allSettled(files.map((f) => this.upload(f, folder)));
+    const results = await Promise.allSettled(files.map((f) => this.upload(f, folder, ownerId)));
     const failed = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
     if (failed) {
       // Don't leave the files that did land in the bucket orphaned when the batch fails.
@@ -169,5 +277,9 @@ export class UploadService implements OnModuleInit {
       throw failed.reason;
     }
     return results.map((r) => (r as PromiseFulfilledResult<UploadResponse>).value);
+  }
+
+  private safeFilename(key: string): string {
+    return (key.split('/').pop() as string).replace(/[^\w.-]/g, '_');
   }
 }

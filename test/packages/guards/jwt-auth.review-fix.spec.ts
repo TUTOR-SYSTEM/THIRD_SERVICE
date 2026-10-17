@@ -6,14 +6,15 @@ describe('JwtAuthGuard (review-fix F-04)', () => {
   it('never verifies with a hardcoded fallback secret when no secret is configured', async () => {
     const verify = jest
       .fn()
-      .mockReturnValue({ sub: 'u1', email: 'a@b.c', typ: 'access', role: 'ADMIN' });
-    const limit = jest.fn(async () => [{ id: 'u1' }]);
+      .mockReturnValue({ sub: 'u1', email: 'a@b.c', typ: 'access', role: 'ADMIN', sid: 's1' });
+    const limit = jest.fn(async () => [{ id: 'u1', isActive: true }]);
     const db = { select: () => ({ from: () => ({ where: () => ({ limit }) }) }) };
     const guard = new JwtAuthGuard(
       { verify } as any,
       { get: jest.fn().mockReturnValue(undefined) } as any,
       { getAllAndOverride: jest.fn().mockReturnValue(false) } as any,
       db as any,
+      { exists: jest.fn().mockResolvedValue(true) } as any,
     );
     const request = { headers: { authorization: 'Bearer tok' } };
     const ctx = {

@@ -1,9 +1,4 @@
-import {
-  BadRequestException,
-  Controller,
-  ForbiddenException,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Controller, ForbiddenException } from '@nestjs/common';
 import { MessagePattern, Payload } from '@nestjs/microservices';
 import { ERROR_MESSAGES } from 'src/data/constants';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from './upload.constant';
@@ -22,55 +17,50 @@ interface UploadRpcFile {
 
 /**
  * Message-pattern mirror of `UploadController` — reached only by the gateway's `THIRD_SERVICE`
- * `ClientProxy` over RabbitMQ. Delegates to the same, unmodified `UploadService` the HTTP controller
- * uses. `Buffer`s are not JSON-serializable, so the gateway sends files as
- * base64 strings (`buffer`) and the download handler reads the S3 stream into a
- * Buffer and returns it base64-encoded.
+ * `ClientProxy` over RabbitMQ. Delegates to the same `UploadService` the HTTP controller uses.
+ * Every payload carries the caller's `userId` and `role` (forwarded by the gateway from the JWT).
+ * Downloads are NOT streamed through the broker any more: `upload.download` replies with a
+ * short-lived presigned URL (contract C5).
  */
 @Controller()
 export class UploadRpcController {
   constructor(private readonly uploadService: UploadService) {}
 
   @MessagePattern('upload.upload')
-  async upload(@Payload() payload: { file: UploadRpcFile }): Promise<UploadResponse> {
-    return this.uploadService.upload(this.reconstruct(payload.file));
+  async upload(
+    @Payload() payload: { file: UploadRpcFile; userId: string; role: string },
+  ): Promise<UploadResponse> {
+    const actor = this.requireActor(payload);
+    this.uploadService.assertUploaderRole(actor.role);
+    await this.uploadService.consumeUploadQuota(actor.userId, 1);
+    return this.uploadService.upload(this.reconstruct(payload.file), 'uploads', actor.userId);
   }
 
   @MessagePattern('upload.uploadMultiple')
-  async uploadMultiple(@Payload() payload: { files: UploadRpcFile[] }): Promise<UploadResponse[]> {
+  async uploadMultiple(
+    @Payload() payload: { files: UploadRpcFile[]; userId: string; role: string },
+  ): Promise<UploadResponse[]> {
+    const actor = this.requireActor(payload);
+    this.uploadService.assertUploaderRole(actor.role);
     if (!Array.isArray(payload.files) || payload.files.length > MAX_UPLOAD_FILES) {
       throw new BadRequestException(`At most ${MAX_UPLOAD_FILES} files are allowed`);
     }
-    return this.uploadService.uploadMultiple(payload.files.map((file) => this.reconstruct(file)));
+    await this.uploadService.consumeUploadQuota(actor.userId, payload.files.length);
+    return this.uploadService.uploadMultiple(
+      payload.files.map((file) => this.reconstruct(file)),
+      'uploads',
+      actor.userId,
+    );
   }
 
+  /**
+   * Owner (or ADMIN) only. Replies `{ url, expiresIn, contentType, filename }` with a presigned
+   * GET URL valid for `PRESIGNED_DOWNLOAD_TTL_SECONDS`; the bytes never cross the broker.
+   */
   @MessagePattern('upload.download')
-  async download(@Payload() payload: { key: string }) {
-    const { stream, contentType, contentLength } = await this.uploadService
-      .download(payload.key)
-      .catch((err: { name?: string }) => {
-        if (err.name === 'NoSuchKey' || err.name === 'NotFound') {
-          throw new NotFoundException(`File "${payload.key}" not found`);
-        }
-        throw err;
-      });
-    const chunks: Buffer[] = [];
-    let total = 0;
-    for await (const chunk of stream) {
-      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
-      total += buf.length;
-      if (total > MAX_UPLOAD_BYTES) {
-        stream.destroy();
-        throw new BadRequestException('File too large to transfer over RPC');
-      }
-      chunks.push(buf);
-    }
-    return {
-      buffer: Buffer.concat(chunks).toString('base64'),
-      contentType,
-      contentLength,
-      filename: payload.key.split('/').pop() as string,
-    };
+  async download(@Payload() payload: { key: string; userId: string; role: string }) {
+    const actor = this.requireActor(payload);
+    return this.uploadService.presignDownload(payload.key, actor);
   }
 
   /**
@@ -85,6 +75,19 @@ export class UploadRpcController {
     }
     await this.uploadService.delete(payload.key);
     return { ok: true, key: payload.key };
+  }
+
+  private requireActor(payload: { userId?: unknown; role?: unknown }): {
+    userId: string;
+    role: string;
+  } {
+    if (typeof payload?.userId !== 'string' || payload.userId.length === 0) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+    return {
+      userId: payload.userId,
+      role: typeof payload.role === 'string' ? payload.role : '',
+    };
   }
 
   private reconstruct(file: UploadRpcFile): MulterFile {

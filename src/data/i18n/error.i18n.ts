@@ -253,6 +253,10 @@ export const ERROR_TRANSLATIONS = {
   },
   UNAUTHORIZED: { vi: 'Chưa xác thực', en: 'Unauthorized' },
   ADMIN_ROLE_REQUIRED: { vi: 'Yêu cầu quyền quản trị', en: 'Admin role required' },
+  UPLOAD_RATE_LIMITED: {
+    vi: 'Tải lên quá nhiều tệp, vui lòng thử lại sau',
+    en: 'Too many files uploaded, please try again later',
+  },
   PERMISSION_DENIED: {
     vi: 'Bạn không có quyền truy cập tài nguyên này',
     en: 'You do not have permission to access this resource',

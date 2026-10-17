@@ -50,6 +50,18 @@ export class EmailService {
     });
   }
 
+  async sendVerifyEmail(params: { to: string; verifyToken: string; displayName: string }) {
+    // Same FE base as the reset link (`PASSWORD_RESET_URL_BASE`), pointing at the verify-email page.
+    const verifyUrl = `${this.resetPasswordUrlBase}/verify-email?token=${encodeURIComponent(params.verifyToken)}`;
+
+    return this.sendMail({
+      to: params.to,
+      subject: 'Verify your email address',
+      html: `<p>Hi ${escapeHtml(params.displayName)},</p><p>Thanks for signing up. Please confirm that this email address belongs to you by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>`,
+      text: `Hi ${params.displayName}, verify your email here: ${verifyUrl} (expires in 24 hours)`,
+    });
+  }
+
   private async sendMail(options: SendMailOptions) {
     try {
       const { data, error } = await this.resend.emails.send({

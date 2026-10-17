@@ -27,8 +27,8 @@ import {
   ApiResponse as SwaggerResponse,
 } from '@nestjs/swagger';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { Roles } from '@packages/decorators';
-import { RolesGuard } from '@packages/guards';
+import { CurrentUser, Roles } from '@packages/decorators';
+import { RolesGuard, type JwtGuardUser } from '@packages/guards';
 import { StatusCodes } from 'http-status-codes';
 import { MAX_UPLOAD_FILES } from './upload.constant';
 import { UploadService } from './upload.service';
@@ -57,8 +57,13 @@ export class UploadController {
     },
   })
   @SwaggerResponse({ status: 201, description: 'File uploaded' })
-  async upload(@UploadedFile() file: MulterFile): Promise<UploadResponse> {
-    return this.uploadService.upload(file);
+  async upload(
+    @CurrentUser() user: JwtGuardUser,
+    @UploadedFile() file: MulterFile,
+  ): Promise<UploadResponse> {
+    this.uploadService.assertUploaderRole(user.role);
+    await this.uploadService.consumeUploadQuota(user.id, 1);
+    return this.uploadService.upload(file, 'uploads', user.id);
   }
 
   @Post('multiple')
@@ -79,8 +84,13 @@ export class UploadController {
     },
   })
   @SwaggerResponse({ status: 201, description: 'Files uploaded' })
-  async uploadMultiple(@UploadedFiles() files: MulterFile[]): Promise<UploadResponse[]> {
-    return this.uploadService.uploadMultiple(files);
+  async uploadMultiple(
+    @CurrentUser() user: JwtGuardUser,
+    @UploadedFiles() files: MulterFile[],
+  ): Promise<UploadResponse[]> {
+    this.uploadService.assertUploaderRole(user.role);
+    await this.uploadService.consumeUploadQuota(user.id, files?.length ?? 0);
+    return this.uploadService.uploadMultiple(files, 'uploads', user.id);
   }
 
   @Get('download')
@@ -92,8 +102,14 @@ export class UploadController {
   @SwaggerResponse({ status: 200, description: 'File stream' })
   @SwaggerResponse({ status: 400, description: 'key query param missing' })
   @SwaggerResponse({ status: 404, description: 'File not found in R2' })
-  async download(@Query('key') key: string, @Res() res: Response): Promise<void> {
+  async download(
+    @CurrentUser() user: JwtGuardUser,
+    @Query('key') key: string,
+    @Res() res: Response,
+  ): Promise<void> {
     if (!key) throw new BadRequestException('key query param is required');
+    // Ownership first: a non-owner gets 403 before any object bytes are opened.
+    await this.uploadService.assertDownloadable(key, { userId: user.id, role: user.role });
     try {
       const { stream, contentType, contentLength } = await this.uploadService.download(key);
       const filename = (key.split('/').pop() as string).replace(/[^\w.-]/g, '_');

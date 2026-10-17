@@ -3,26 +3,31 @@ import { PassThrough, Readable } from 'stream';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UploadController } from 'src/features/uploads/upload.controller';
-import { UploadRpcController } from 'src/features/uploads/upload.rpc.controller';
 import { UploadService } from 'src/features/uploads/upload.service';
 
 jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
 describe('UploadController.download — branches', () => {
-  const service = { download: jest.fn() };
+  const service = { download: jest.fn(), assertDownloadable: jest.fn().mockResolvedValue({}) };
   const controller = new UploadController(service as unknown as UploadService);
   const response = () => ({ setHeader: jest.fn(), status: jest.fn() }) as never;
+  const user = { id: 'u1', role: 'ADMIN' } as never;
 
   it('rejects a missing key with 400', async () => {
-    await expect(controller.download('', response())).rejects.toBeInstanceOf(BadRequestException);
+    await expect(controller.download(user, '', response())).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
   });
 
   it('omits Content-Length when the object size is unknown', async () => {
-    service.download.mockResolvedValue({ stream: Readable.from([Buffer.from('x')]), contentType: 'text/plain' });
+    service.download.mockResolvedValue({
+      stream: Readable.from([Buffer.from('x')]),
+      contentType: 'text/plain',
+    });
     const res = Object.assign(new PassThrough(), { setHeader: jest.fn() });
     res.resume();
 
-    await controller.download('uploads/b.txt', res as never);
+    await controller.download(user, 'uploads/b.txt', res as never);
     await new Promise((r) => setTimeout(r, 10));
 
     expect(res.setHeader).not.toHaveBeenCalledWith('Content-Length', expect.anything());
@@ -30,7 +35,7 @@ describe('UploadController.download — branches', () => {
 
   it('maps a missing R2 object to 404', async () => {
     service.download.mockRejectedValue(Object.assign(new Error('x'), { name: 'NoSuchKey' }));
-    await expect(controller.download('gone.jpg', response())).rejects.toBeInstanceOf(
+    await expect(controller.download(user, 'gone.jpg', response())).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
@@ -38,25 +43,7 @@ describe('UploadController.download — branches', () => {
   it('rethrows any other storage error unchanged', async () => {
     const boom = new Error('network');
     service.download.mockRejectedValue(boom);
-    await expect(controller.download('x.jpg', response())).rejects.toBe(boom);
-  });
-});
-
-describe('UploadRpcController.download — chunk types', () => {
-  it('concatenates Uint8Array chunks as well as Buffers', async () => {
-    const service = {
-      download: jest.fn().mockResolvedValue({
-        stream: Readable.from([new Uint8Array([1, 2]), Buffer.from([3])]),
-        contentType: 'application/octet-stream',
-        contentLength: 3,
-      }),
-    };
-    const controller = new UploadRpcController(service as unknown as UploadService);
-
-    const out = await controller.download({ key: 'uploads/dir/file.bin' });
-
-    expect(Buffer.from(out.buffer, 'base64')).toEqual(Buffer.from([1, 2, 3]));
-    expect(out.filename).toBe('file.bin');
+    await expect(controller.download(user, 'x.jpg', response())).rejects.toBe(boom);
   });
 });
 

@@ -1,6 +1,22 @@
 import { BadRequestException, Controller } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
-import { RedisService } from './redis.service';
+import { z } from 'zod';
+import { DELETABLE_PREFIX_PATTERN, RedisService } from './redis.service';
+
+/** Key families that hold sessions / refresh hashes / reset tokens: must always carry a TTL. */
+const TTL_REQUIRED_PREFIXES = [
+  'session:',
+  'login-session:',
+  'reset-password:',
+  'refresh:',
+  'refresh-token:',
+];
+
+const delByPrefixSchema = z.object({
+  prefix: z
+    .string({ message: 'prefix is required' })
+    .regex(DELETABLE_PREFIX_PATTERN, 'prefix must be session:<uuid>: or refresh:<uuid>:'),
+});
 
 /**
  * Message-pattern mirror of `RedisController` — reached by the gateway's/`user`'s
@@ -27,8 +43,30 @@ export class RedisRpcController {
   // completes empty and `RmqProducer.send()` treats it as a failure.
   @MessagePattern('redis.set')
   async set(@Payload() payload: { key: string; value: string; ttlSeconds?: number }) {
+    const lowered = String(payload?.key ?? '').toLowerCase();
+    if (
+      (payload?.ttlSeconds === undefined || payload?.ttlSeconds === null) &&
+      TTL_REQUIRED_PREFIXES.some((prefix) => lowered.startsWith(prefix))
+    ) {
+      // A session / refresh / reset key without TTL would never expire.
+      throw new BadRequestException('ttlSeconds is required for this key');
+    }
     await this.redisService.set(payload.key, payload.value, payload.ttlSeconds);
     return { ok: true };
+  }
+
+  /**
+   * Bulk revoke for contract C1 (`session:{userId}:` / `refresh:{userId}:`). Scans with SCAN.
+   * Replies `{ deleted }` (never empty, so `RmqProducer.send()` treats it as success).
+   */
+  @MessagePattern('redis.delByPrefix')
+  async delByPrefix(@Payload() payload: unknown) {
+    const parsed = delByPrefixSchema.safeParse(payload ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+    const deleted = await this.redisService.delByPrefix(parsed.data.prefix);
+    return { deleted };
   }
 
   @EventPattern('redis.del')

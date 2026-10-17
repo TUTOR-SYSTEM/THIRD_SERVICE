@@ -27,6 +27,16 @@ const connectionOptions = {
   | 'commandTimeout'
 >;
 
+/**
+ * Only the per-user session / refresh key families may be bulk-deleted (contract C1):
+ * `session:<uuid>:` and `refresh:<uuid>:`. Anything else is rejected, so `delByPrefix('')` or
+ * `delByPrefix('*')` can never wipe unrelated data.
+ */
+export const DELETABLE_PREFIX_PATTERN =
+  /^(session|refresh):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:$/i;
+
+const SCAN_BATCH = 200;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -124,6 +134,32 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('ttlSeconds must be a positive number');
     }
     await this.client.set(key, value, 'EX', Math.ceil(ttlSeconds));
+  }
+
+  /**
+   * Deletes every key starting with an allowed `session:<uuid>:` / `refresh:<uuid>:` prefix.
+   * Uses SCAN (never KEYS) so it does not block Redis. Returns the number of keys deleted.
+   */
+  async delByPrefix(prefix: string): Promise<number> {
+    if (typeof prefix !== 'string' || !DELETABLE_PREFIX_PATTERN.test(prefix)) {
+      throw new BadRequestException('prefix is not allowed');
+    }
+    let cursor = '0';
+    let deleted = 0;
+    do {
+      const [next, keys] = await this.client.scan(
+        cursor,
+        'MATCH',
+        `${prefix}*`,
+        'COUNT',
+        SCAN_BATCH,
+      );
+      cursor = next;
+      if (keys.length > 0) {
+        deleted += await this.client.del(...keys);
+      }
+    } while (cursor !== '0');
+    return deleted;
   }
 
   async del(...keys: string[]): Promise<number> {
