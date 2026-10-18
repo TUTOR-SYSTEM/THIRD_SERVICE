@@ -3,9 +3,17 @@ import type { LogRepository } from 'src/features/log/log.repository';
 import type { LogGateway } from 'src/features/log/log.gateway';
 
 describe('LogService', () => {
-  const repo = { create: jest.fn(), findAll: jest.fn(), findByCorrelationId: jest.fn(), statsByEndpoint: jest.fn() };
+  const repo = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findByCorrelationId: jest.fn(),
+    statsByEndpoint: jest.fn(),
+  };
   const gateway = { emitNewLog: jest.fn() };
-  const service = new LogService(repo as unknown as LogRepository, gateway as unknown as LogGateway);
+  const service = new LogService(
+    repo as unknown as LogRepository,
+    gateway as unknown as LogGateway,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -46,16 +54,24 @@ describe('LogService', () => {
     repo.statsByEndpoint.mockResolvedValue([{ endpoint: 'GET /x', count: 3 }]);
 
     await expect(service.findAll({ page: 1 } as never)).resolves.toEqual({ data: [] });
-    await expect(service.findByCorrelationId('c1')).resolves.toEqual([{ id: 1 }]);
+    await expect(service.findByCorrelationId('c1', 20)).resolves.toEqual([{ id: 1 }]);
     await expect(service.stats()).resolves.toEqual([{ endpoint: 'GET /x', count: 3 }]);
-    expect(repo.findByCorrelationId).toHaveBeenCalledWith('c1');
+    expect(repo.findByCorrelationId).toHaveBeenCalledWith('c1', 20);
   });
 });
 
 describe('LogService.createInternal failure modes', () => {
-  const repo = { create: jest.fn(), findAll: jest.fn(), findByCorrelationId: jest.fn(), statsByEndpoint: jest.fn() };
+  const repo = {
+    create: jest.fn(),
+    findAll: jest.fn(),
+    findByCorrelationId: jest.fn(),
+    statsByEndpoint: jest.fn(),
+  };
   const gateway = { emitNewLog: jest.fn() };
-  const service = new LogService(repo as unknown as LogRepository, gateway as unknown as LogGateway);
+  const service = new LogService(
+    repo as unknown as LogRepository,
+    gateway as unknown as LogGateway,
+  );
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -65,7 +81,9 @@ describe('LogService.createInternal failure modes', () => {
   it('logs the string form of a non-Error insert failure', async () => {
     repo.create.mockRejectedValue('driver said no');
     await expect(service.createInternal({} as never)).resolves.toBeUndefined();
-    expect(service['logger'].warn).toHaveBeenCalledWith('Failed to persist request log: driver said no');
+    expect(service['logger'].warn).toHaveBeenCalledWith(
+      'Failed to persist request log: driver said no',
+    );
     expect(gateway.emitNewLog).not.toHaveBeenCalled();
   });
 

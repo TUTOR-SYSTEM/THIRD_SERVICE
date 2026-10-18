@@ -33,6 +33,7 @@ jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
 const TUTOR = { id: 'tutor-1', role: 'TUTOR', email: 't@x.y', typ: 'access', sid: 's' } as never;
 const STUDENT = { id: 'stu-1', role: 'STUDENT', email: 's@x.y', typ: 'access', sid: 's' } as never;
+const PARENT = { id: 'par-1', role: 'PARENT', email: 'p@x.y', typ: 'access', sid: 's' } as never;
 
 describe('UploadController (HTTP)', () => {
   const service = {
@@ -75,10 +76,8 @@ describe('UploadController (HTTP)', () => {
     expect(service.upload).toHaveBeenCalledWith(file, 'uploads', 'tutor-1');
   });
 
-  it('upload refuses a STUDENT before any bytes are stored', async () => {
-    await expect(controller.upload(STUDENT, {} as never)).rejects.toBeInstanceOf(
-      ForbiddenException,
-    );
+  it('upload refuses a PARENT before any bytes are stored', async () => {
+    await expect(controller.upload(PARENT, {} as never)).rejects.toBeInstanceOf(ForbiddenException);
     expect(service.upload).not.toHaveBeenCalled();
   });
 

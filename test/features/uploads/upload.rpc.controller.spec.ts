@@ -82,10 +82,9 @@ describe('UploadRpcController', () => {
   });
 
   it.each([
-    ['STUDENT', 'upload'],
     ['PARENT', 'upload'],
     [undefined, 'upload'],
-  ])('upload refuses role %s (contract C5: only ADMIN/TUTOR upload)', async (role) => {
+  ])('upload refuses role %s (only ADMIN, TUTOR and STUDENT upload)', async (role) => {
     await expect(
       controller.upload({ file: rpcFile('a.txt', [1]), userId: 'u', role: role as string }),
     ).rejects.toBeInstanceOf(ForbiddenException);

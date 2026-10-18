@@ -97,7 +97,7 @@ export class UploadService implements OnModuleInit {
     }
   }
 
-  /** Only ADMIN and TUTOR may upload (contract C5). Fail closed on a missing role. */
+  /** Only ADMIN, TUTOR and STUDENT may upload (PARENT is refused). Fail closed on a missing role. */
   assertUploaderRole(role: string | undefined): void {
     if (!role || !UPLOADER_ROLES.has(role)) {
       throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);

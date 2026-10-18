@@ -7,6 +7,7 @@ import { LogService } from './log.service';
 
 const traceSchema = z.object({
   correlationId: z.string().trim().min(1, 'correlationId is required').max(100),
+  limit: z.coerce.number().int().min(1).max(1000).default(500),
 });
 
 /**
@@ -40,7 +41,7 @@ export class LogRpcController {
     if (!result.success) {
       throw new BadRequestException(result.error.issues.map((i) => i.message).join('; '));
     }
-    return this.logService.findByCorrelationId(result.data.correlationId);
+    return this.logService.findByCorrelationId(result.data.correlationId, result.data.limit);
   }
 
   @MessagePattern('log.stats')

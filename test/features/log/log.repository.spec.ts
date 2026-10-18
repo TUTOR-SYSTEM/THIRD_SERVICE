@@ -58,10 +58,26 @@ describe('LogRepository.statsByEndpoint', () => {
     expect(where.sql).toContain(`>= now() - interval '24 hours'`);
     expect(where.params).toEqual(['gateway', 'HTTP']);
 
-    expect(calls.groupBy.map((col) => render(sql`${col}`).sql)).toEqual([
-      '"request_logs"."method"',
-      '"request_logs"."path"',
-    ]);
+    // path is grouped by its normalized form (ids collapsed to :id), not the raw path
+    const fields = calls.select[0] as Record<string, unknown>;
+    expect(calls.groupBy).toHaveLength(2);
+    expect(render(sql`${calls.groupBy[0]}`).sql).toBe('"request_logs"."method"');
+    expect(render(calls.groupBy[1]).sql).not.toBe('"request_logs"."path"');
+    expect(render(calls.groupBy[1]).sql).toContain('regexp_replace');
+    expect(render(calls.groupBy[1])).toEqual(render(fields.path));
+  });
+
+  it('normalizes UUID and numeric path segments to :id and drops the query string', async () => {
+    const { db, calls } = fakeSelectDb([]);
+    await new LogRepository(db as never).statsByEndpoint();
+
+    const fields = calls.select[0] as Record<string, unknown>;
+    const { sql: pathSql, params } = render(fields.path);
+    expect(pathSql).toContain('split_part("request_logs"."path"');
+    expect(pathSql).toContain('[0-9a-fA-F]{8}-[0-9a-fA-F]{4}');
+    expect(pathSql).toContain('/[0-9]+(?=/|$)');
+    expect(pathSql).toContain("'/:id'");
+    expect(params).toEqual([]);
   });
 });
 

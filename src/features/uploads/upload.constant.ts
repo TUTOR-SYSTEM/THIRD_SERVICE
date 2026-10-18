@@ -11,8 +11,8 @@ export const UPLOAD_FILES_PER_MINUTE = 30;
 export const PRESIGNED_DOWNLOAD_TTL_SECONDS = 300;
 /** S3 object metadata key holding the uploader's user id (used for download ownership). */
 export const OWNER_METADATA_KEY = 'owner-id';
-/** Roles allowed to upload (contract C5: STUDENT/PARENT are rejected). */
-export const UPLOADER_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'TUTOR']);
+/** Roles allowed to upload (PARENT is rejected). Objects are owner-tagged, so students only read their own. */
+export const UPLOADER_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'TUTOR', 'STUDENT']);
 export const UPLOAD_KEY_PREFIX = `${UPLOAD_DIR}/`;
 
 /** Images are decoded and re-encoded to JPEG by sharp, so the stored object is always image/jpeg. */

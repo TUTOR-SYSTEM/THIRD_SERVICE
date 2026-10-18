@@ -37,6 +37,14 @@ export const DELETABLE_PREFIX_PATTERN =
 
 const SCAN_BATCH = 200;
 
+const INCR_WITH_WINDOW_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -167,6 +175,33 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return 0;
     }
     return await this.client.del(...keys);
+  }
+
+  /**
+   * Atomic read-and-delete (GETDEL): returns the value and removes the key in one step, so two
+   * concurrent callers can never both read the same single-use token.
+   */
+  async getdel(key: string): Promise<string | null> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    return await this.client.getdel(key);
+  }
+
+  /**
+   * Atomic counter with a fixed window: INCR, and EXPIRE only when this call created the key.
+   * Done in one Lua script so a crash between the two commands can never leave a counter without
+   * a TTL. Returns the count after this increment.
+   */
+  async incrWithWindow(key: string, windowSeconds: number): Promise<number> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    if (!Number.isInteger(windowSeconds) || windowSeconds <= 0) {
+      throw new BadRequestException('windowSeconds must be a positive integer');
+    }
+    const count = await this.client.eval(INCR_WITH_WINDOW_SCRIPT, 1, key, windowSeconds);
+    return Number(count);
   }
 
   async onModuleDestroy(): Promise<void> {

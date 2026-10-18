@@ -18,6 +18,14 @@ const delByPrefixSchema = z.object({
     .regex(DELETABLE_PREFIX_PATTERN, 'prefix must be session:<uuid>: or refresh:<uuid>:'),
 });
 
+const incrSchema = z.object({
+  key: z.string({ message: 'key is required' }).min(1, 'key is required').max(256),
+  windowSeconds: z
+    .number({ message: 'windowSeconds must be a positive integer' })
+    .int('windowSeconds must be a positive integer')
+    .positive('windowSeconds must be a positive integer'),
+});
+
 /**
  * Message-pattern mirror of `RedisController` — reached by the gateway's/`user`'s
  * `RmqProducer` over the `third_queue` RabbitMQ queue. Delegates to
@@ -36,6 +44,29 @@ export class RedisRpcController {
   @MessagePattern('redis.exists')
   exists(@Payload() payload: { key: string }) {
     return this.redisService.exists(payload.key);
+  }
+
+  // Atomic read-and-delete for single-use tokens (reset-password): only one caller gets the value.
+  @MessagePattern('redis.getdel')
+  getdel(@Payload() payload?: { key: string }) {
+    return this.redisService.getdel(payload?.key as string);
+  }
+
+  /**
+   * Atomic fixed-window counter (e.g. failed-login attempts per account). Replies with the count
+   * after this increment; the window starts when the key is first created.
+   */
+  @MessagePattern('redis.incr')
+  async incr(@Payload() payload: unknown) {
+    const parsed = incrSchema.safeParse(payload ?? {});
+    if (!parsed.success) {
+      throw new BadRequestException(parsed.error.issues.map((i) => i.message).join('; '));
+    }
+    const count = await this.redisService.incrWithWindow(
+      parsed.data.key,
+      parsed.data.windowSeconds,
+    );
+    return { count };
   }
 
   // Request-reply so callers can wait for the write to land (e.g. the reset-password token must

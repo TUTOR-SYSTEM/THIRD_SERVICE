@@ -133,11 +133,11 @@ describe('UploadService ownership, presign and quota', () => {
   });
 
   describe('assertUploaderRole', () => {
-    it.each(['ADMIN', 'TUTOR'])('allows %s', (role) => {
+    it.each(['ADMIN', 'TUTOR', 'STUDENT'])('allows %s', (role) => {
       expect(() => service().assertUploaderRole(role)).not.toThrow();
     });
 
-    it.each(['STUDENT', 'PARENT', '', undefined])('refuses %p', (role) => {
+    it.each(['PARENT', '', undefined])('refuses %p', (role) => {
       expect(() => service().assertUploaderRole(role as string)).toThrow(ForbiddenException);
     });
   });

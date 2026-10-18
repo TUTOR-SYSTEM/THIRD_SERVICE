@@ -139,7 +139,11 @@ export class NotificationRepository {
     return note ?? null;
   }
 
-  /** `userId` set => recipient-only; omitted (ADMIN) => unrestricted. */
+  /**
+   * `userId` set => recipient-only; omitted (ADMIN) => unrestricted.
+   * Intentional: a sender can see a notification they sent but cannot mark it read or delete it,
+   * since only the recipient manages its read/delete state.
+   */
   async markAsRead(id: string, userId?: string) {
     const [note] = await this.db
       .update(notifications)
@@ -164,7 +168,10 @@ export class NotificationRepository {
     return { markedAll: true, count: updated.length };
   }
 
-  /** `userId` set => recipient-only; omitted (ADMIN) => unrestricted. */
+  /**
+   * `userId` set => recipient-only; omitted (ADMIN) => unrestricted.
+   * Intentional: the sender cannot delete a notification addressed to someone else (see markAsRead).
+   */
   async delete(id: string, userId?: string) {
     const [note] = await this.db.delete(notifications).where(this.ownedBy(id, userId)).returning();
     return !!note;

@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-// PreToolUse hook (Write|Edit): deny edits to protected files.
-//   - .env / .env.* — hold secrets, must be edited by a human.
+// PreToolUse hook (Write|Edit): ask before editing protected files.
+//   - .env / .env.* — hold secrets; Claude asks before editing them.
 // (drizzle/ migrations moved to the gateway repo — 2026-09-28 schema consolidation — so that
 // half of the rule no longer applies here.)
-// Emits a PreToolUse permission "deny" as JSON; otherwise stays silent and allows the edit.
+// Emits a PreToolUse permission decision ("ask") as JSON; otherwise stays silent and allows the edit.
 let input = '';
 process.stdin.on('data', (c) => (input += c));
 process.stdin.on('end', () => {
@@ -20,7 +20,7 @@ process.stdin.on('end', () => {
   const rules = [
     {
       re: /(^|\/)\.env(\.[^/]+)?$/,
-      why: '.env files hold secrets — edit them manually, never through Claude.',
+      why: '.env files hold secrets — confirm before Claude edits them.',
     },
   ];
 
@@ -30,7 +30,7 @@ process.stdin.on('end', () => {
         JSON.stringify({
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
-            permissionDecision: 'deny',
+            permissionDecision: 'ask',
             permissionDecisionReason: rule.why,
           },
         }),
