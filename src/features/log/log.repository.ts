@@ -10,6 +10,13 @@ import type {
   GetRequestLogsQueryDto,
 } from '@packages/entities/log';
 
+/**
+ * Path with the query string dropped and UUID / numeric segments replaced by `:id`, so every
+ * `/classes/<uuid>` call lands in one stats row instead of one row per id. Inlined SQL (no bound
+ * params) so the select list and the GROUP BY render identically.
+ */
+const normalizedPath = sql<string>`regexp_replace(regexp_replace(split_part(${requestLogs.path}, '?', 1), '/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?=/|$)', '/:id', 'g'), '/[0-9]+(?=/|$)', '/:id', 'g')`;
+
 @Injectable()
 export class LogRepository {
   constructor(
@@ -78,6 +85,7 @@ export class LogRepository {
     };
   }
 
+  // bounded: callers may pass a limit (validated at the RPC edge, max 1000); default 500
   async findByCorrelationId(correlationId: string, limit = 500) {
     return this.db
       .select()
@@ -94,7 +102,7 @@ export class LogRepository {
     const rows = await this.db
       .select({
         method: requestLogs.method,
-        path: requestLogs.path,
+        path: normalizedPath,
         calls24h: count(),
         errorCount: sql<string>`count(*) filter (where ${requestLogs.statusCode} >= 400)`,
         p95Ms: sql<string>`percentile_cont(0.95) within group (order by ${requestLogs.durationMs})`,
@@ -107,7 +115,7 @@ export class LogRepository {
           gte(requestLogs.createdAt, sql`now() - interval '24 hours'`),
         ),
       )
-      .groupBy(requestLogs.method, requestLogs.path)
+      .groupBy(requestLogs.method, normalizedPath)
       .orderBy(desc(count()));
 
     return rows.map((r) => ({

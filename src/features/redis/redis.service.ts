@@ -27,6 +27,24 @@ const connectionOptions = {
   | 'commandTimeout'
 >;
 
+/**
+ * Only the per-user session / refresh key families may be bulk-deleted (contract C1):
+ * `session:<uuid>:` and `refresh:<uuid>:`. Anything else is rejected, so `delByPrefix('')` or
+ * `delByPrefix('*')` can never wipe unrelated data.
+ */
+export const DELETABLE_PREFIX_PATTERN =
+  /^(session|refresh):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}:$/i;
+
+const SCAN_BATCH = 200;
+
+const INCR_WITH_WINDOW_SCRIPT = `
+local count = redis.call('INCR', KEYS[1])
+if count == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+return count
+`;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -41,7 +59,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       this.client = new Redis(url, { ...connectionOptions });
     } else {
       const host = this.configService.get<string>('REDIS_HOST')?.trim() || 'localhost';
-      const port = Number(this.configService.get<string>('REDIS_PORT')?.trim() || '6380');
+      const port = Number(this.configService.get<string>('REDIS_PORT')?.trim() || '6379');
       const password = this.configService.get<string>('REDIS_PASSWORD')?.trim();
       this.endpointLabel = `${host}:${Number.isFinite(port) ? port : 6380}`;
       const opts: RedisOptions = {
@@ -126,11 +144,64 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.client.set(key, value, 'EX', Math.ceil(ttlSeconds));
   }
 
+  /**
+   * Deletes every key starting with an allowed `session:<uuid>:` / `refresh:<uuid>:` prefix.
+   * Uses SCAN (never KEYS) so it does not block Redis. Returns the number of keys deleted.
+   */
+  async delByPrefix(prefix: string): Promise<number> {
+    if (typeof prefix !== 'string' || !DELETABLE_PREFIX_PATTERN.test(prefix)) {
+      throw new BadRequestException('prefix is not allowed');
+    }
+    let cursor = '0';
+    let deleted = 0;
+    do {
+      const [next, keys] = await this.client.scan(
+        cursor,
+        'MATCH',
+        `${prefix}*`,
+        'COUNT',
+        SCAN_BATCH,
+      );
+      cursor = next;
+      if (keys.length > 0) {
+        deleted += await this.client.del(...keys);
+      }
+    } while (cursor !== '0');
+    return deleted;
+  }
+
   async del(...keys: string[]): Promise<number> {
     if (keys.length === 0) {
       return 0;
     }
     return await this.client.del(...keys);
+  }
+
+  /**
+   * Atomic read-and-delete (GETDEL): returns the value and removes the key in one step, so two
+   * concurrent callers can never both read the same single-use token.
+   */
+  async getdel(key: string): Promise<string | null> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    return await this.client.getdel(key);
+  }
+
+  /**
+   * Atomic counter with a fixed window: INCR, and EXPIRE only when this call created the key.
+   * Done in one Lua script so a crash between the two commands can never leave a counter without
+   * a TTL. Returns the count after this increment.
+   */
+  async incrWithWindow(key: string, windowSeconds: number): Promise<number> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    if (!Number.isInteger(windowSeconds) || windowSeconds <= 0) {
+      throw new BadRequestException('windowSeconds must be a positive integer');
+    }
+    const count = await this.client.eval(INCR_WITH_WINDOW_SCRIPT, 1, key, windowSeconds);
+    return Number(count);
   }
 
   async onModuleDestroy(): Promise<void> {

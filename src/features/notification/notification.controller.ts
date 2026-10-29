@@ -32,7 +32,7 @@ export class NotificationController {
   @ApiBody({
     schema: {
       type: 'object',
-      required: ['type', 'title'],
+      required: ['type', 'title', 'content'],
       properties: {
         type: {
           type: 'string',
@@ -55,7 +55,10 @@ export class NotificationController {
     @Body(new ZodValidationPipe<CreateNotificationDto>(createNotificationSchema))
     dto: CreateNotificationDto,
   ) {
-    return this.notificationService.createNotificationService({ ...dto, senderId: user.id }, user.role);
+    return this.notificationService.createNotificationService(
+      { ...dto, senderId: user.id },
+      user.role,
+    );
   }
 
   @Get()

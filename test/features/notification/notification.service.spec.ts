@@ -13,6 +13,10 @@ const dto = (overrides: Record<string, unknown> = {}) =>
 describe('NotificationService', () => {
   const repo = {
     create: jest.fn(),
+    createMany: jest.fn(),
+    tutorOwnsClass: jest.fn(),
+    tutorTeachesStudent: jest.fn(),
+    studentIdsOfClass: jest.fn(),
     findAll: jest.fn(),
     findById: jest.fn(),
     markAsRead: jest.fn(),
@@ -27,25 +31,87 @@ describe('NotificationService', () => {
   });
 
   describe('createNotificationService (validated path)', () => {
-    it('persists a notification whose ids are all valid UUIDs', async () => {
-      repo.create.mockResolvedValue({ id: 'n1' });
+    it('persists a notification whose ids are all valid UUIDs, one row per recipient', async () => {
+      repo.createMany.mockResolvedValue([{ id: 'n1' }]);
+      repo.studentIdsOfClass.mockResolvedValue([OTHER, ID]);
       const input = dto({ userId: OTHER, classId: OTHER, studentId: OTHER });
 
-      await expect(service.createNotificationService(input, 'ADMIN')).resolves.toEqual({ id: 'n1' });
-      expect(repo.create).toHaveBeenCalledWith(input);
+      await expect(service.createNotificationService(input, 'ADMIN')).resolves.toEqual({
+        id: 'n1',
+      });
+      expect(repo.createMany).toHaveBeenCalledWith([
+        expect.objectContaining({ userId: OTHER, classId: OTHER }),
+        expect.objectContaining({ userId: ID, classId: OTHER }),
+      ]);
+    });
+
+    it('stores an unaddressed row when there is no recipient at all', async () => {
+      repo.create.mockResolvedValue({ id: 'n0' });
+      repo.studentIdsOfClass.mockResolvedValue([]);
+
+      await expect(
+        service.createNotificationService(dto({ classId: OTHER }), 'ADMIN'),
+      ).resolves.toEqual({ id: 'n0' });
+      expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({ userId: null }));
+    });
+
+    describe('TUTOR recipient rules', () => {
+      const tutorDto = (overrides: Record<string, unknown> = {}) =>
+        dto({ type: 'STUDENT', ...overrides });
+
+      it('may notify a class it teaches and fans out to every enrolled student', async () => {
+        repo.tutorOwnsClass.mockResolvedValue(true);
+        repo.studentIdsOfClass.mockResolvedValue([OTHER]);
+        repo.createMany.mockResolvedValue([{ id: 'n2' }]);
+
+        await service.createNotificationService(tutorDto({ classId: OTHER }), 'TUTOR');
+        expect(repo.tutorOwnsClass).toHaveBeenCalledWith(OTHER, ID);
+        expect(repo.createMany).toHaveBeenCalledWith([expect.objectContaining({ userId: OTHER })]);
+      });
+
+      it('refuses a class it does not teach', async () => {
+        repo.tutorOwnsClass.mockResolvedValue(false);
+
+        await expect(
+          service.createNotificationService(tutorDto({ classId: OTHER }), 'TUTOR'),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(repo.createMany).not.toHaveBeenCalled();
+        expect(repo.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses a studentId or userId not enrolled in one of its classes', async () => {
+        repo.tutorTeachesStudent.mockResolvedValue(false);
+
+        await expect(
+          service.createNotificationService(tutorDto({ studentId: OTHER }), 'TUTOR'),
+        ).rejects.toMatchObject({ status: 403 });
+        await expect(
+          service.createNotificationService(tutorDto({ userId: OTHER }), 'TUTOR'),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(repo.createMany).not.toHaveBeenCalled();
+      });
+
+      it('refuses a notification with no target at all', async () => {
+        await expect(service.createNotificationService(tutorDto(), 'TUTOR')).rejects.toMatchObject({
+          status: 403,
+        });
+        expect(repo.createMany).not.toHaveBeenCalled();
+      });
     });
 
     it('rejects a missing senderId with USER_ID_NOT_VALID and does not write', async () => {
-      await expect(service.createNotificationService(dto({ senderId: undefined }), 'ADMIN')).rejects.toMatchObject({
+      await expect(
+        service.createNotificationService(dto({ senderId: undefined }), 'ADMIN'),
+      ).rejects.toMatchObject({
         message: ERROR_MESSAGES.USER_ID_NOT_VALID,
       });
       expect(repo.create).not.toHaveBeenCalled();
     });
 
     it('rejects a malformed senderId', async () => {
-      await expect(service.createNotificationService(dto({ senderId: 'not-a-uuid' }), 'ADMIN')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.createNotificationService(dto({ senderId: 'not-a-uuid' }), 'ADMIN'),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(repo.create).not.toHaveBeenCalled();
     });
 
@@ -53,7 +119,9 @@ describe('NotificationService', () => {
       ['classId', ERROR_MESSAGES.CLASS_ID_NOT_VALID],
       ['studentId', ERROR_MESSAGES.STUDENT_ID_NOT_VALID],
     ])('rejects a malformed %s with its specific error code', async (field, code) => {
-      await expect(service.createNotificationService(dto({ [field]: '123' }), 'ADMIN')).rejects.toMatchObject({
+      await expect(
+        service.createNotificationService(dto({ [field]: '123' }), 'ADMIN'),
+      ).rejects.toMatchObject({
         message: code,
       });
       expect(repo.create).not.toHaveBeenCalled();
@@ -62,7 +130,9 @@ describe('NotificationService', () => {
     it('allows optional FK ids to be absent', async () => {
       repo.create.mockResolvedValue({ id: 'n2' });
 
-      await expect(service.createNotificationService(dto({ classId: null, studentId: undefined }), 'ADMIN')).resolves.toEqual({
+      await expect(
+        service.createNotificationService(dto({ classId: null, studentId: undefined }), 'ADMIN'),
+      ).resolves.toEqual({
         id: 'n2',
       });
     });
@@ -85,7 +155,9 @@ describe('NotificationService', () => {
     });
 
     it('undefined role is not creatable (403)', async () => {
-      await expect(service.createNotificationService(dto(), undefined)).rejects.toMatchObject({ status: 403 });
+      await expect(service.createNotificationService(dto(), undefined)).rejects.toMatchObject({
+        status: 403,
+      });
     });
   });
 

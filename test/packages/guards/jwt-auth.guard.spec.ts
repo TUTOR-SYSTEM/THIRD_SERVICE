@@ -1,12 +1,17 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { JwtAuthGuard } from '@packages/guards/jwt-auth.guard';
+import { RedisService } from 'src/features/redis/redis.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
-const validPayload = { sub: USER_ID, email: 'a@b.c', typ: 'access', role: 'TUTOR' };
+const validPayload = { sub: USER_ID, email: 'a@b.c', typ: 'access', role: 'TUTOR', sid: 'sid-1' };
 
 const contextWith = (headers: Record<string, string> = {}) => {
   const request: { headers: Record<string, string>; user?: unknown } = { headers };
@@ -23,13 +28,15 @@ describe('JwtAuthGuard', () => {
   let jwt: { verify: jest.Mock };
   let config: { get: jest.Mock };
   let userRows: unknown[];
+  let redis: { exists: jest.Mock };
   let guard: JwtAuthGuard;
 
   beforeEach(() => {
     reflector = { getAllAndOverride: jest.fn().mockReturnValue(false) };
     jwt = { verify: jest.fn().mockReturnValue(validPayload) };
     config = { get: jest.fn().mockReturnValue('access-secret') };
-    userRows = [{ id: USER_ID }];
+    userRows = [{ id: USER_ID, isActive: true }];
+    redis = { exists: jest.fn().mockResolvedValue(true) };
 
     const limit = jest.fn(async () => userRows);
     const where = jest.fn(() => ({ limit }));
@@ -41,6 +48,7 @@ describe('JwtAuthGuard', () => {
       config as unknown as ConfigService,
       reflector as unknown as Reflector,
       db as never,
+      redis as unknown as RedisService,
     );
   });
 
@@ -97,6 +105,8 @@ describe('JwtAuthGuard', () => {
     ['a payload without sub', { ...validPayload, sub: undefined }],
     ['a payload without email', { ...validPayload, email: undefined }],
     ['a non-object payload', 'string-payload'],
+    ['a legacy token without sid', { ...validPayload, sid: undefined }],
+    ['a token with an empty sid', { ...validPayload, sid: '' }],
   ])('rejects %s', async (_label, payload) => {
     jwt.verify.mockReturnValue(payload);
 
@@ -117,7 +127,13 @@ describe('JwtAuthGuard', () => {
     const { ctx, request } = contextWith({ authorization: 'Bearer t' });
 
     await expect(guard.canActivate(ctx)).resolves.toBe(true);
-    expect(request.user).toEqual({ id: USER_ID, email: 'a@b.c', typ: 'access', role: 'TUTOR' });
+    expect(request.user).toEqual({
+      id: USER_ID,
+      email: 'a@b.c',
+      typ: 'access',
+      role: 'TUTOR',
+      sid: 'sid-1',
+    });
   });
 
   it('falls back to STUDENT for an unknown role claim', async () => {
@@ -135,5 +151,49 @@ describe('JwtAuthGuard', () => {
     await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
       UnauthorizedException,
     );
+  });
+
+  it('rejects a token whose session is not in Redis (logged out / revoked)', async () => {
+    redis.exists.mockResolvedValue(false);
+
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
+    expect(redis.exists).toHaveBeenCalledWith(`session:${USER_ID}:sid-1`);
+  });
+
+  it('rejects a deactivated user even with a live session', async () => {
+    userRows = [{ id: USER_ID, isActive: false }];
+
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      UnauthorizedException,
+    );
+  });
+
+  it('fails closed with 503 when the session store errors, after one retry', async () => {
+    redis.exists.mockRejectedValue(new Error('ECONNREFUSED'));
+
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).rejects.toThrow(
+      ServiceUnavailableException,
+    );
+    expect(redis.exists).toHaveBeenCalledTimes(2);
+  });
+
+  it('fails open only when SESSION_CHECK_FAIL_OPEN=true', async () => {
+    redis.exists.mockRejectedValue(new Error('ECONNREFUSED'));
+    config.get.mockImplementation((key: string) =>
+      key === 'SESSION_CHECK_FAIL_OPEN' ? 'true' : 'access-secret',
+    );
+
+    await expect(guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx)).resolves.toBe(
+      true,
+    );
+  });
+
+  it('caches a successful session check for a few seconds', async () => {
+    await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
+    await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
+
+    expect(redis.exists).toHaveBeenCalledTimes(1);
   });
 });

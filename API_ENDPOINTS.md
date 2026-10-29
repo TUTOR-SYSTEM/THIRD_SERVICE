@@ -556,7 +556,7 @@ nhà") — all optional, default `[]`/`null`, not yet rendered by any FE page as
 
 | M   | Path     | Auth   | Scenario | Payload | Response                  | Roles | Status |
 | --- | -------- | ------ | -------- | ------- | ------------------------- | ----- | ------ |
-| GET | `/emails`| Public | success  | —       | Test email sent response  | —     |        |
+| POST | `/emails/test`| ADMIN | success  | —       | Test email sent response  | ADMIN |        |
 
 
 ---

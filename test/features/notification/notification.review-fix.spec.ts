@@ -50,7 +50,9 @@ describe('F-12 notification ownership (RPC -> service -> repo)', () => {
     '%s as non-owner scopes the query by userId and returns 404 when nothing matches',
     async (method) => {
       const { rpc, wheres } = build([]);
-      await expect((rpc as any)[method]({ id: ID, userId: ME, role: 'STUDENT' })).rejects.toMatchObject({
+      await expect(
+        (rpc as any)[method]({ id: ID, userId: ME, role: 'STUDENT' }),
+      ).rejects.toMatchObject({
         status: 404,
       });
       expect(params(wheres)).toContain(ME);
@@ -72,17 +74,26 @@ describe('F-12 notification ownership (RPC -> service -> repo)', () => {
     expect(params(b.wheres).filter((p) => p === ME)).toHaveLength(1);
   });
 
-  it.each(['getById', 'markAsRead', 'del'] as const)('%s as ADMIN is not restricted by userId', async (method) => {
-    const { rpc, wheres } = build([{ id: ID }]);
-    await (rpc as any)[method]({ id: ID, userId: ME, role: 'ADMIN' });
-    expect(params(wheres)).not.toContain(ME);
-  });
+  it.each(['getById', 'markAsRead', 'del'] as const)(
+    '%s as ADMIN is not restricted by userId',
+    async (method) => {
+      const { rpc, wheres } = build([{ id: ID }]);
+      await (rpc as any)[method]({ id: ID, userId: ME, role: 'ADMIN' });
+      expect(params(wheres)).not.toContain(ME);
+    },
+  );
 });
 
 describe('F-13 create permission by role', () => {
   const base = { title: 't', content: 'c', senderId: ME, userId: ID };
   const create = (type: string, role: string) => {
-    const repo = { create: jest.fn().mockResolvedValue({ id: 'n' }) };
+    const repo = {
+      create: jest.fn().mockResolvedValue({ id: 'n' }),
+      createMany: jest.fn().mockResolvedValue([{ id: 'n' }]),
+      tutorOwnsClass: jest.fn().mockResolvedValue(true),
+      tutorTeachesStudent: jest.fn().mockResolvedValue(true),
+      studentIdsOfClass: jest.fn().mockResolvedValue([]),
+    };
     const rpc = new NotificationRpcController(new NotificationService(repo as never));
     return { repo, run: () => rpc.create({ ...base, type, role } as any) };
   };
@@ -103,7 +114,7 @@ describe('F-13 create permission by role', () => {
     for (const type of ['SYSTEM', 'TUITION']) {
       const { repo, run } = create(type, 'ADMIN');
       await run();
-      expect(repo.create).toHaveBeenCalled();
+      expect(repo.createMany).toHaveBeenCalled();
     }
   });
 
@@ -111,24 +122,35 @@ describe('F-13 create permission by role', () => {
     for (const type of ['TUTOR', 'STUDENT']) {
       const { repo, run } = create(type, 'TUTOR');
       await run();
-      expect(repo.create).toHaveBeenCalled();
+      expect(repo.createMany).toHaveBeenCalled();
     }
   });
 });
 
 describe('F-13 redirectUrl validation', () => {
+  beforeAll(() => {
+    process.env.NOTIFICATION_REDIRECT_HOSTS = 'example.com';
+  });
+  afterAll(() => {
+    delete process.env.NOTIFICATION_REDIRECT_HOSTS;
+  });
   const parse = (redirectUrl: string) =>
-    createNotificationSchema.safeParse({ type: 'TUTOR', title: 't', content: 'c', redirectUrl }).success;
+    createNotificationSchema.safeParse({ type: 'TUTOR', title: 't', content: 'c', redirectUrl })
+      .success;
 
   it.each(['/classes/1', '/a?b=1#c', 'https://example.com/x'])('accepts %s', (u) => {
     expect(parse(u)).toBe(true);
   });
-  it.each(['javascript:alert(1)', 'data:text/html,x', 'http://example.com', '//evil.com', 'evil.com', 'JaVaScRiPt:alert(1)'])(
-    'rejects %s',
-    (u) => {
-      expect(parse(u)).toBe(false);
-    },
-  );
+  it.each([
+    'javascript:alert(1)',
+    'data:text/html,x',
+    'http://example.com',
+    '//evil.com',
+    'evil.com',
+    'JaVaScRiPt:alert(1)',
+  ])('rejects %s', (u) => {
+    expect(parse(u)).toBe(false);
+  });
 });
 
 describe('F-23 isRead query parsing', () => {
@@ -147,7 +169,11 @@ describe('F-23 isRead query parsing', () => {
 describe('F-33 search wildcard escaping (notification)', () => {
   it('escapes \\, % and _', async () => {
     const { db, wheres } = fakeDb([]);
-    await new NotificationRepository(db as never).findAll(ME, { page: 1, limit: 10, search: '50%_a\\b' } as any);
+    await new NotificationRepository(db as never).findAll(ME, {
+      page: 1,
+      limit: 10,
+      search: '50%_a\\b',
+    } as any);
     const ps = render(wheres[0]).params as string[];
     expect(ps).toContain('%50\\%\\_a\\\\b%');
   });
@@ -172,7 +198,9 @@ describe('F-34/F-21 notification RPC payload parsing', () => {
     const service = { createNotificationService: jest.fn() };
     const rpc = new NotificationRpcController(service as never);
     await expect(
-      Promise.resolve().then(() => rpc.create({ type: 'NOPE', title: 't', content: 'c', senderId: ME, role: 'ADMIN' } as any)),
+      Promise.resolve().then(() =>
+        rpc.create({ type: 'NOPE', title: 't', content: 'c', senderId: ME, role: 'ADMIN' } as any),
+      ),
     ).rejects.toBeDefined();
     expect(service.createNotificationService).not.toHaveBeenCalled();
   });
@@ -189,12 +217,19 @@ describe('extra cases (verify)', () => {
     const repo = { create: jest.fn() };
     const rpc = new NotificationRpcController(new NotificationService(repo as never));
     await expect(
-      Promise.resolve().then(() => rpc.create({ type: 'TUTOR', title: 't', content: 'c', senderId: ME } as any)),
+      Promise.resolve().then(() =>
+        rpc.create({ type: 'TUTOR', title: 't', content: 'c', senderId: ME } as any),
+      ),
     ).rejects.toMatchObject({ status: 403 });
   });
   it('redirectUrl /\\evil.com is rejected', () => {
     expect(
-      createNotificationSchema.safeParse({ type: 'TUTOR', title: 't', content: 'c', redirectUrl: '/\\evil.com' }).success,
+      createNotificationSchema.safeParse({
+        type: 'TUTOR',
+        title: 't',
+        content: 'c',
+        redirectUrl: '/\\evil.com',
+      }).success,
     ).toBe(false);
   });
 });

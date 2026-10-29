@@ -34,6 +34,7 @@ const SENSITIVE_KEYS = new Set(
     'accessToken',
     'refreshToken',
     'resetToken',
+    'verifyToken',
     // reset-password JWT id: the reset token itself is valid for 5 minutes (TRD3-11).
     'jti',
     'value',

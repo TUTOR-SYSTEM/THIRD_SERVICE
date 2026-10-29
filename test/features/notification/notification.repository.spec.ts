@@ -183,7 +183,9 @@ describe('NotificationRepository.findAll filter matrix', () => {
 
   it('always scopes to the caller as recipient or sender', async () => {
     const { where } = await runFindAll({});
-    expect(where.sql).toBe('("notifications"."user_id" = $1 or "notifications"."sender_id" = $2)');
+    expect(where.sql).toBe(
+      '("notifications"."user_id" = $1 or ("notifications"."sender_id" = $2 and "notifications"."user_id" is null))',
+    );
     expect(where.params).toEqual(['user-1', 'user-1']);
   });
 

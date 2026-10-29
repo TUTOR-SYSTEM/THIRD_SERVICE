@@ -27,8 +27,8 @@ export class LogService {
     return this.repo.findAll(query);
   }
 
-  async findByCorrelationId(correlationId: string) {
-    return this.repo.findByCorrelationId(correlationId);
+  async findByCorrelationId(correlationId: string, limit = 500) {
+    return this.repo.findByCorrelationId(correlationId, limit);
   }
 
   async stats() {
