@@ -461,29 +461,29 @@ nhà") — all optional, default `[]`/`null`, not yet rendered by any FE page as
 
 ---
 
-## 14. Notifications — `/notifications`
+## 14. Notifications — `/notification`
 
 
 | M      | Path                      | Auth | Scenario                      | Payload                                  | Response                                                                                    | Roles     | Status    |
 | ------ | ------------------------- | ---- | ----------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------- | --------- | --------- |
-| POST   | `/notifications`          | JWT  | success                       | `{ title, content, type?, receiverId? }` | Created notification                                                                        | All       |           |
-| POST   | `/notifications`          | JWT  | 400                           | Body                                     | `"UserId not valid"` • `"User not found"` • `"classId not valid"` • `"studentId not valid"` | All       |           |
-| POST   | `/notifications`          | JWT  | 422: title                    | missing • &gt; 255                       | `"Title is required"` • `"Title too long"`                                                  | All       |           |
-| POST   | `/notifications`          | JWT  | 422: type                     | invalid enum                             | `"Invalid enum value. Expected 'SYSTEM'                                                     | 'TUITION' | 'STUDENT' |
-| POST   | `/notifications`          | JWT  | 422: content                  | missing                                  | `"Content must be string"`                                                                  | All       |           |
-| POST   | `/notifications`          | JWT  | 422: userId/classId/studentId | not uuid                                 | `"userId must be uuid"` • `"classId must be uuid"` • `"studentId must be uuid"`             | All       |           |
-| POST   | `/notifications`          | JWT  | 422: actionType               | invalid enum                             | `"Invalid enum value. Expected 'VIEW'                                                       | 'CONTACT' | 'PAYMENT' |
-| POST   | `/notifications`          | JWT  | 422: redirectUrl              | &gt; 500 chars                           | Zod default                                                                                 | All       |           |
-| POST   | `/notifications`          | JWT  | 422: subContent               | &gt; 255 chars                           | Zod default                                                                                 | All       |           |
-| GET    | `/notifications`          | JWT  | success                       | Query: `type?, isRead?`                  | Notifications for current user                                                              | All       |           |
-| GET    | `/notifications`          | JWT  | 422: type                     | invalid enum                             | `"Invalid enum value"`                                                                      | All       |           |
-| GET    | `/notifications/:id`      | JWT  | success                       | —                                        | Notification detail                                                                         | All       |           |
-| GET    | `/notifications/:id`      | JWT  | 404                           | —                                        | `"Notification not found"`                                                                  | All       |           |
-| PATCH  | `/notifications/:id/read` | JWT  | success                       | —                                        | Marked as read                                                                              | All       |           |
-| PATCH  | `/notifications/:id/read` | JWT  | 404                           | —                                        | `"Notification not found"`                                                                  | All       |           |
-| PATCH  | `/notifications/read-all` | JWT  | success                       | —                                        | `{ markedAll: true }`                                                                       | All       |           |
-| DELETE | `/notifications/:id`      | JWT  | success                       | —                                        | Deletion result                                                                             | All       |           |
-| DELETE | `/notifications/:id`      | JWT  | 404                           | —                                        | `"Notification not found"`                                                                  | All       |           |
+| POST   | `/notification/create`    | JWT  | success                       | `{ title, content, type?, receiverId? }` | Created notification                                                                        | All       |           |
+| POST   | `/notification/create`    | JWT  | 400                           | Body                                     | `"UserId not valid"` • `"User not found"` • `"classId not valid"` • `"studentId not valid"` | All       |           |
+| POST   | `/notification/create`    | JWT  | 422: title                    | missing • &gt; 255                       | `"Title is required"` • `"Title too long"`                                                  | All       |           |
+| POST   | `/notification/create`    | JWT  | 422: type                     | invalid enum                             | `"Invalid enum value. Expected 'SYSTEM'                                                     | 'TUITION' | 'STUDENT' |
+| POST   | `/notification/create`    | JWT  | 422: content                  | missing                                  | `"Content must be string"`                                                                  | All       |           |
+| POST   | `/notification/create`    | JWT  | 422: userId/classId/studentId | not uuid                                 | `"userId must be uuid"` • `"classId must be uuid"` • `"studentId must be uuid"`             | All       |           |
+| POST   | `/notification/create`    | JWT  | 422: actionType               | invalid enum                             | `"Invalid enum value. Expected 'VIEW'                                                       | 'CONTACT' | 'PAYMENT' |
+| POST   | `/notification/create`    | JWT  | 422: redirectUrl              | &gt; 500 chars                           | Zod default                                                                                 | All       |           |
+| POST   | `/notification/create`    | JWT  | 422: subContent               | &gt; 255 chars                           | Zod default                                                                                 | All       |           |
+| GET    | `/notification/getAll`    | JWT  | success                       | Query: `type?, isRead?`                  | Notifications for current user                                                              | All       |           |
+| GET    | `/notification/getAll`    | JWT  | 422: type                     | invalid enum                             | `"Invalid enum value"`                                                                      | All       |           |
+| GET    | `/notification/getById/:id` | JWT  | success                       | —                                        | Notification detail                                                                         | All       |           |
+| GET    | `/notification/getById/:id` | JWT  | 404                           | —                                        | `"Notification not found"`                                                                  | All       |           |
+| PATCH  | `/notification/markAsRead/:id` | JWT  | success                       | —                                        | Marked as read                                                                              | All       |           |
+| PATCH  | `/notification/markAsRead/:id` | JWT  | 404                           | —                                        | `"Notification not found"`                                                                  | All       |           |
+| PATCH  | `/notification/markAllAsRead` | JWT  | success                       | —                                        | `{ markedAll: true }`                                                                       | All       |           |
+| DELETE | `/notification/delete/:id` | JWT  | success                       | —                                        | Deletion result                                                                             | All       |           |
+| DELETE | `/notification/delete/:id` | JWT  | 404                           | —                                        | `"Notification not found"`                                                                  | All       |           |
 
 
 ---
@@ -504,8 +504,8 @@ nhà") — all optional, default `[]`/`null`, not yet rendered by any FE page as
 
 | M   | Path     | Auth | Scenario | Payload      | Response                        | Roles | Status |
 | --- | -------- | ---- | -------- | ------------ | ------------------------------- | ----- | ------ |
-| GET | `/redis` | JWT  | success  | Query: `key` | `string                         | null` | All    |
-| GET | `/redis` | JWT  | 400      | Query        | `"key query param is required"` | All   |        |
+| GET | `/redis/get` | JWT  | success  | Query: `key` | `string                         | null` | All    |
+| GET | `/redis/get` | JWT  | 400      | Query        | `"key query param is required"` | All   |        |
 
 
 ---
@@ -515,11 +515,11 @@ nhà") — all optional, default `[]`/`null`, not yet rendered by any FE page as
 
 | M      | Path               | Auth   | Scenario | Payload                       | Response                                                   | Roles | Status |
 | ------ | ------------------ | ------ | -------- | ----------------------------- | ---------------------------------------------------------- | ----- | ------ |
-| POST   | `/upload`          | Public | success  | Multipart: `file`             | `{ url, key, size, mimetype }`                             | —     |        |
-| POST   | `/upload/multiple` | Public | success  | Multipart: `files[]` (max 10) | `Array<{ url, key, size, mimetype }>`                      | —     |        |
+| POST   | `/upload/upload`   | Public | success  | Multipart: `file`             | `{ url, key, size, mimetype }`                             | —     |        |
+| POST   | `/upload/uploadMultiple` | Public | success  | Multipart: `files[]` (max 10) | `Array<{ url, key, size, mimetype }>`                      | —     |        |
 | GET    | `/upload/download` | Public | success  | Query: `key`                  | File stream (Content-Type + Content-Disposition)           | —     |        |
 | GET    | `/upload/download` | Public | 400/404  | Query                         | `"key query param is required"` • `"File {key} not found"` | —     |        |
-| DELETE | `/upload/:key`     | Public | success  | —                             | Deletion confirmation                                      | —     |        |
+| DELETE | `/upload/delete/:key` | Public | success  | —                             | Deletion confirmation                                      | —     |        |
 
 
 ---
@@ -551,12 +551,12 @@ nhà") — all optional, default `[]`/`null`, not yet rendered by any FE page as
 
 ---
 
-## 20. Email — `/emails`
+## 20. Email — `/email`
 
 
 | M   | Path     | Auth   | Scenario | Payload | Response                  | Roles | Status |
 | --- | -------- | ------ | -------- | ------- | ------------------------- | ----- | ------ |
-| POST | `/emails/test`| ADMIN | success  | —       | Test email sent response  | ADMIN |        |
+| POST | `/email/test` | ADMIN | success  | —       | Test email sent response  | ADMIN |        |
 
 
 ---
@@ -598,13 +598,13 @@ read access follows the same rule as `GET /sessions/:id` (owner, enrolled studen
 | 11        | LessonController       | `/curriculum/lessons` | 9    | 0      | 0               |
 | 12        | ExerciseController     | `/exercises`       | 5       | 0      | 0               |
 | 13        | TuitionController      | `/tuitions`        | 6       | 0      | 0               |
-| 14        | NotificationController | `/notifications`   | 6       | 0      | 0               |
+| 14        | NotificationController | `/notification`    | 6       | 0      | 0               |
 | 15        | DashboardController    | `/dashboard`       | 1       | 0      | 0               |
 | 16        | RedisController        | `/redis`           | 1       | 0      | 0               |
 | 17        | UploadController       | `/upload`          | 4       | 4      | 0               |
 | 18        | AiController           | `/ai-chat`         | 3       | 0      | 0               |
 | 19        | ReportController       | `/reports/learning`| 3       | 0      | 3 (ADMIN)       |
-| 20        | EmailController        | `/emails`          | 1       | 1      | 0               |
+| 20        | EmailController        | `/email`           | 1       | 1      | 0               |
 | 21        | AttendanceController   | `/attendances`     | 2       | 0      | 0               |
 | **Total** |                        |                    | **115** | **14** | **16**          |
 

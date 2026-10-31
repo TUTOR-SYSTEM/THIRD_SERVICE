@@ -206,7 +206,7 @@ Authorization: Bearer <access_token>
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| GET | `/redis?key=...` | Bearer | Get value by key |
+| GET | `/redis/get?key=...` | Bearer | Get value by key |
 
 ## Database Schema
 
