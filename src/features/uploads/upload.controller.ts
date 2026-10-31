@@ -42,7 +42,7 @@ export class UploadController {
 
   constructor(private readonly uploadService: UploadService) {}
 
-  @Post()
+  @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
   @HttpCode(StatusCodes.CREATED)
   @ApiOperation({ summary: 'Upload file', description: 'Upload a file to Cloudflare R2' })
@@ -66,7 +66,7 @@ export class UploadController {
     return this.uploadService.upload(file, 'uploads', user.id);
   }
 
-  @Post('multiple')
+  @Post('uploadMultiple')
   @UseInterceptors(FilesInterceptor('files', MAX_UPLOAD_FILES))
   @HttpCode(StatusCodes.CREATED)
   @ApiOperation({ summary: 'Upload multiple files' })
@@ -135,7 +135,7 @@ export class UploadController {
 
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @Delete(':key')
+  @Delete('delete/:key')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Delete file' })
   @SwaggerResponse({ status: 200, description: 'File deleted' })

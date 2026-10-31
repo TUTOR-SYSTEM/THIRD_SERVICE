@@ -22,11 +22,11 @@ import { NotificationService } from './notification.service';
 
 @ApiTags('Notifications')
 @ApiBearerAuth('access-token')
-@Controller('notifications')
+@Controller('notification')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
-  @Post()
+  @Post('create')
   @HttpCode(StatusCodes.CREATED)
   @ApiOperation({ summary: 'Create notification successfully ...' })
   @ApiBody({
@@ -61,7 +61,7 @@ export class NotificationController {
     );
   }
 
-  @Get()
+  @Get('getAll')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Get all notifications for the current user' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
@@ -78,7 +78,7 @@ export class NotificationController {
     return this.notificationService.findAll(user.id, query);
   }
 
-  @Get(':id')
+  @Get('getById/:id')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Get notification detail' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
@@ -87,7 +87,7 @@ export class NotificationController {
     return this.notificationService.findById(id, { userId: user.id, role: user.role });
   }
 
-  @Patch(':id/read')
+  @Patch('markAsRead/:id')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Mark notification as read' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })
@@ -96,7 +96,7 @@ export class NotificationController {
     return this.notificationService.markAsRead(id, { userId: user.id, role: user.role });
   }
 
-  @Patch('read-all')
+  @Patch('markAllAsRead')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({
     summary: 'Mark all as read',
@@ -107,7 +107,7 @@ export class NotificationController {
     return this.notificationService.markAllAsRead(user.id);
   }
 
-  @Delete(':id')
+  @Delete('delete/:id')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Delete notification' })
   @ApiParam({ name: 'id', type: String, format: 'uuid' })

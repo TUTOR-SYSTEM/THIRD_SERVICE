@@ -22,11 +22,11 @@ import { LogService } from './log.service';
 @ApiBearerAuth('access-token')
 @UseGuards(RolesGuard)
 @Roles('ADMIN')
-@Controller('logs')
+@Controller('log')
 export class LogController {
   constructor(private readonly logService: LogService) {}
 
-  @Get()
+  @Get('query')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'List request logs across all services (admin only)' })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })

@@ -4,7 +4,7 @@ import { createRequestLogSchema, getRequestLogsQuerySchema } from './log.schema'
 export type CreateRequestLogDto = z.infer<typeof createRequestLogSchema>;
 export type GetRequestLogsQueryDto = z.infer<typeof getRequestLogsQuerySchema>;
 
-/** One row of `GET /logs/stats` — aggregated over the last 24h, grouped by `(method, path)`. */
+/** One row of `GET /log/stats` — aggregated over the last 24h, grouped by `(method, path)`. */
 export type EndpointStatsDto = {
   method: string;
   path: string;

@@ -21,7 +21,7 @@ const SENSITIVE_KEYS = new Set(
 const MAX_LOG_LENGTH = 1000;
 const JWT_PATTERN = /eyJ[\w-]+\.[\w-]+\.[\w-]+/g;
 /** Routes whose response data must never be logged. */
-const NO_RESPONSE_LOG_PATHS = ['/redis', '/upload/download', '/logs'];
+const NO_RESPONSE_LOG_PATHS = ['/redis', '/upload/download', '/log'];
 
 function redact(value: unknown): unknown {
   if (typeof value === 'string') return value.replace(JWT_PATTERN, '[REDACTED]');

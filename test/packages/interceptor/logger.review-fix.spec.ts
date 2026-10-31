@@ -24,7 +24,7 @@ async function run(url: string, data: unknown, body?: unknown) {
 describe('LoggerInterceptor review fixes (F-19)', () => {
   afterEach(() => jest.restoreAllMocks());
 
-  it.each(['/redis?key=session:u1', '/upload/download?key=a/b', '/logs?search=x'])(
+  it.each(['/redis?key=session:u1', '/upload/download?key=a/b', '/log?search=x'])(
     'does not log response data for %s',
     async (url) => {
       const out = await run(url, { secret: 'LEAKME-DATA' });

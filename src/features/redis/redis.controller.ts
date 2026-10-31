@@ -27,7 +27,7 @@ const SENSITIVE_KEY_PREFIXES = [
 export class RedisController {
   constructor(private readonly redisService: RedisService) {}
 
-  @Get('')
+  @Get('get')
   @ApiOperation({ summary: 'Get Redis value', description: 'Retrieve a value from Redis by key' })
   @ApiQuery({ name: 'key', required: true, type: String, description: 'Redis key' })
   @SwaggerResponse({ status: 200, description: 'Value retrieved (null if key does not exist)' })
