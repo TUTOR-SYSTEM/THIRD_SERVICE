@@ -61,9 +61,12 @@ This repo inlines Swagger content directly on the controller (`@ApiOperation`,
 `@ApiBody({ schema: {...} })`, `@ApiQuery(...)`, `@ApiResponse as SwaggerResponse`) rather than
 pulling from `src/data/swaggers/*` data files — match `notification.controller.ts`'s inline
 style, don't introduce the separate-file pattern used in `tutor-service`/`user` unless asked to.
+Every new `@ApiTags('X')` must also get a matching `.addTag('X')` in the `DocumentBuilder` chain in `src/main.ts` (and removed there if the controller is deleted). Keep the tag list in sync with `conventions.md`.
 
 ## Rules
 - Controllers hold no business logic — delegate everything to the service.
 - Import `ZodValidationPipe` from `@packages/pipes`, DTOs/schemas from `@packages/entities/foo`.
-- Routes are protected by the global `JwtAuthGuard` (+ `LanguageGuard`, `TokenBucketGuard`). Add
-  `@Public()` from `@packages/decorators` only for intentionally open endpoints.
+- HTTP controllers in this repo are class-level `@Public()` (no access token, no ADMIN gate) — except
+  `notification`, which stays JWT-guarded because it scopes by `user.id`. Match
+  `email.controller.ts`/`upload.controller.ts`. Global `LanguageGuard`/`TokenBucketGuard` still apply.
+  Never add `@Public()` to `*.rpc.controller.ts`.

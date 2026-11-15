@@ -4,8 +4,8 @@ import { EmailService } from 'src/features/email/email.service';
 
 const sendMock = jest.fn();
 
-jest.mock('resend', () => ({
-  Resend: jest.fn().mockImplementation(() => ({ emails: { send: sendMock } })),
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn(() => ({ sendMail: sendMock })),
 }));
 
 const makeConfig = (values: Record<string, string | undefined>) =>
@@ -18,7 +18,7 @@ const makeConfig = (values: Record<string, string | undefined>) =>
   }) as unknown as ConfigService;
 
 const baseConfig = {
-  RESEND_API_KEY: 're_test',
+  SMTP_HOST: 'smtp.test',
   MAIL_FROM: 'Tutor <noreply@tutor.dev>',
 };
 
@@ -31,7 +31,7 @@ describe('EmailService.sendVerifyEmail', () => {
   afterEach(() => jest.restoreAllMocks());
 
   it('sends a verify mail with the subject, sender and recipient', async () => {
-    sendMock.mockResolvedValue({ data: { id: 'msg_v1' }, error: null });
+    sendMock.mockResolvedValue({ messageId: 'msg_v1' });
     const service = new EmailService(makeConfig(baseConfig));
 
     const result = await service.sendVerifyEmail({
@@ -48,7 +48,7 @@ describe('EmailService.sendVerifyEmail', () => {
   });
 
   it('builds the verify link on /verify-email with a URL-encoded token, in both html and text', async () => {
-    sendMock.mockResolvedValue({ data: { id: 'x' }, error: null });
+    sendMock.mockResolvedValue({ messageId: 'x' });
     const service = new EmailService(
       makeConfig({ ...baseConfig, PASSWORD_RESET_URL_BASE: 'https://app.tutor.dev' }),
     );
@@ -64,18 +64,16 @@ describe('EmailService.sendVerifyEmail', () => {
   });
 
   it('falls back to localhost:3000 for the link base when PASSWORD_RESET_URL_BASE is not configured', async () => {
-    sendMock.mockResolvedValue({ data: { id: 'x' }, error: null });
+    sendMock.mockResolvedValue({ messageId: 'x' });
     const service = new EmailService(makeConfig(baseConfig));
 
     await service.sendVerifyEmail({ to: 'a@b.c', verifyToken: 't', displayName: 'A' });
 
-    expect(sendMock.mock.calls[0][0].text).toContain(
-      'http://localhost:3000/verify-email?token=t',
-    );
+    expect(sendMock.mock.calls[0][0].text).toContain('http://localhost:3000/verify-email?token=t');
   });
 
   it('states the 24-hour expiry in both html and text', async () => {
-    sendMock.mockResolvedValue({ data: { id: 'x' }, error: null });
+    sendMock.mockResolvedValue({ messageId: 'x' });
     const service = new EmailService(makeConfig(baseConfig));
 
     await service.sendVerifyEmail({ to: 'a@b.c', verifyToken: 't', displayName: 'A' });
@@ -87,7 +85,7 @@ describe('EmailService.sendVerifyEmail', () => {
   });
 
   it('escapes HTML special characters in the display name but not in the plain-text body', async () => {
-    sendMock.mockResolvedValue({ data: {}, error: null });
+    sendMock.mockResolvedValue({ messageId: 'm' });
     const service = new EmailService(makeConfig(baseConfig));
     const name = `<img src=x onerror="alert(1)">&'`;
 
@@ -100,7 +98,7 @@ describe('EmailService.sendVerifyEmail', () => {
   });
 
   it('does not put the raw verify token anywhere except the link (token is URL-encoded in the link)', async () => {
-    sendMock.mockResolvedValue({ data: {}, error: null });
+    sendMock.mockResolvedValue({ messageId: 'm' });
     const service = new EmailService(makeConfig(baseConfig));
     const token = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
@@ -111,8 +109,8 @@ describe('EmailService.sendVerifyEmail', () => {
     expect(text).toContain(`verify-email?token=${token}`);
   });
 
-  it('rethrows and logs when Resend returns an error object', async () => {
-    sendMock.mockResolvedValue({ data: null, error: { message: 'domain not verified' } });
+  it('rethrows and logs when the transport rejects', async () => {
+    sendMock.mockRejectedValue(new Error('domain not verified'));
     const service = new EmailService(makeConfig(baseConfig));
 
     await expect(
@@ -121,7 +119,7 @@ describe('EmailService.sendVerifyEmail', () => {
     expect(Logger.prototype.error).toHaveBeenCalled();
   });
 
-  it('propagates transport exceptions from the Resend SDK', async () => {
+  it('propagates transport exceptions from nodemailer', async () => {
     sendMock.mockRejectedValue(new Error('ECONNRESET'));
     const service = new EmailService(makeConfig(baseConfig));
 

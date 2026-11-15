@@ -35,6 +35,7 @@ import {
   PRESIGNED_DOWNLOAD_TTL_SECONDS,
   S3_CLIENT,
   UPLOAD_FILES_PER_MINUTE,
+  SUBMISSION_KEY_PREFIX,
   UPLOAD_KEY_PREFIX,
   UPLOADER_ROLES,
 } from './upload.constant';
@@ -72,17 +73,15 @@ export class UploadService implements OnModuleInit {
     } catch (_err) {
       const err = _err as Error & { name: string; $metadata?: { httpStatusCode?: number } };
 
-      if (err.$metadata?.httpStatusCode === 403) {
-        this.logger.error(
-          `Cloudflare R2: Access Denied for bucket "${this.bucket}" — ` +
-            'ensure the bucket exists in the R2 dashboard and the API token has write permission',
-        );
-      } else {
-        this.logger.error(
-          `Cloudflare R2 connection failed: ${err.name} — ${err.message}` +
-            (err.$metadata ? ` [status=${err.$metadata.httpStatusCode}]` : ''),
-        );
-      }
+      const hint =
+        err.$metadata?.httpStatusCode === 403
+          ? ' — check the bucket exists, the API token has write permission on it, and the key/secret/endpoint belong to the same account'
+          : '';
+      this.logger.error(
+        `Cloudflare R2 connection failed: ${err.name} — ${err.message}` +
+          (err.$metadata ? ` [status=${err.$metadata.httpStatusCode}]` : '') +
+          hint,
+      );
     }
   }
 
@@ -92,7 +91,8 @@ export class UploadService implements OnModuleInit {
   }
 
   private assertValidKey(key: string): void {
-    if (!key || !key.startsWith(UPLOAD_KEY_PREFIX) || key.includes('..') || key.includes('\\')) {
+    const validPrefix = key?.startsWith(UPLOAD_KEY_PREFIX) || key?.startsWith(SUBMISSION_KEY_PREFIX);
+    if (!key || !validPrefix || key.includes('..') || key.includes('\\')) {
       throw new BadRequestException('Invalid file key');
     }
   }
@@ -214,7 +214,8 @@ export class UploadService implements OnModuleInit {
       throw err;
     }
     const owner = head.Metadata?.[OWNER_METADATA_KEY];
-    if (actor.role !== 'ADMIN' && (!owner || owner !== actor.userId)) {
+    // Gateway đã kiểm tra quyền theo buổi học/bài tập/bài giảng (exercise.fileAccess) → tin cờ đó.
+    if (!actor.authorized && actor.role !== 'ADMIN' && (!owner || owner !== actor.userId)) {
       throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
     }
     return {
@@ -253,9 +254,19 @@ export class UploadService implements OnModuleInit {
     };
   }
 
+  /** 404 when the object does not exist (S3 DeleteObject alone is silent for missing keys). */
   async delete(key: string): Promise<void> {
     this.assertValidKey(key);
     const s3 = this.requireS3();
+    try {
+      await s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (err) {
+      const e = err as { name?: string };
+      if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
+        throw new NotFoundException(ERROR_MESSAGES.FILE_NOT_FOUND);
+      }
+      throw err;
+    }
     await s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
   }
 

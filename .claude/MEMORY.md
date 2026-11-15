@@ -17,7 +17,7 @@ third-service/
 │   │   ├── database.module.ts     # Global Drizzle ORM provider (postgres.js)
 │   │   └── schema.ts              # Mostly vestigial — see database.md; only `notifications`+`users` are used
 │   ├── features/                  # 4 modules — NOT a class/schedule/session domain (that's tutor-service)
-│   │   ├── email/                 # Stateless service wrapping Resend, no repository; + email.rpc.controller.ts
+│   │   ├── email/                 # Stateless service wrapping Nodemailer SMTP, no repository; + email.rpc.controller.ts
 │   │   ├── notification/          # Full controller→service→repository→module, Postgres-backed;
 │   │   │                          # + notification.rpc.controller.ts; NotificationModule is registered
 │   │   ├── uploads/                # Provider/interface pattern, Cloudflare R2 (S3-compatible) + Sharp;
@@ -93,12 +93,12 @@ RabbitMQ (2026-09-27). The old hand-rolled pub/sub (`RabbitMQModule`, `health.ch
 
 ## Key Files
 
-- `src/main.ts` — Bootstrap, RabbitMQ microservice setup, Swagger tags (stale, see conventions.md)
+- `src/main.ts` — Bootstrap, RabbitMQ microservice setup, Swagger tags (match `@ApiTags` usage, see conventions.md)
 - `src/features/redis/redis.rpc.controller.ts` — The generic KV RPC surface other services
   reuse most (see "RMQ RPC Plumbing" above)
 - `src/features/notification/*` — Reference for the full layered feature shape
 - `src/features/uploads/upload.provider.ts` — S3Client factory for Cloudflare R2
-- `src/features/email/email.service.ts` — Resend wrapper
+- `src/features/email/email.service.ts` — Nodemailer SMTP wrapper
 - `src/database/database.module.ts` — Global DB provider (DRIZZLE token)
 
 ## Commands
@@ -115,7 +115,7 @@ bun compose:up / compose:down / podman:up / podman:down
 
 `RABBITMQ_URL` (local `amqp://admin:admin@localhost:5672`; Railway: the RabbitMQ service's
 private URL) and `THIRD_QUEUE` (default `third_queue`). Otherwise see `CLAUDE.md`'s Environment
-Variables table for the full list (Postgres, Redis, `RESEND_API_KEY`/`MAIL_FROM`/
+Variables table for the full list (Postgres, Redis, `SMTP_HOST`/`MAIL_FROM`/
 `PASSWORD_RESET_URL_BASE`, `CLOUDFLARE_R2_*`, plus JWT verification vars shared with `user`).
 Several OAuth-related vars (`GOOGLE_*`, `FACEBOOK_*`, `BACKEND_URL`) are read by shared
 `@packages` code but not wired to any actual route in this repo.
@@ -155,7 +155,7 @@ Several OAuth-related vars (`GOOGLE_*`, `FACEBOOK_*`, `BACKEND_URL`) are read by
 ## Rules
 
 - `conventions.md` — What's specific to this repo (list-response `data` key, unused helpers,
-  stale Swagger tags, unused `cloudinary` dep) — points to `../.claude/rules/shared-conventions.md`
+  Swagger tags kept in sync with `@ApiTags`, unused `cloudinary` dep) — points to `../.claude/rules/shared-conventions.md`
   for the cross-service baseline
 - `database.md` — **Read this before touching `schema.ts`** — most of it is vestigial
 - `nestjs-feature-pattern.md` — The 3 real feature shapes + the RMQ RPC responder pattern
@@ -169,11 +169,11 @@ Cross-service rules (RPC contract, shared conventions) live one level up in `api
 
 ## Security hardening (2026-10-11, from gateway/reviews/third-review.md)
 
-- Fixed: upload/email-test routes no longer `@Public()`; no fallback JWT secret
+- Fixed: no fallback JWT secret. (Later reversed: HTTP controllers except notification are now `@Public()`, ADMIN gates removed, per user request — see conventions.md.)
   (`resolveJwtAccessSecret` throws); notification id routes scoped to received/sent user;
   `redis.*`/`email.*`/`log.*` bodies not stored in `request_logs`; Redis 5s command timeout +
   strict `set` validation; upload size cap + `stream.pipeline` download; rate limiter fails open.
 - `redis.controller.ts` (HTTP) was deleted in the working tree before this — only RPC `redis.*` remains.
 - NOT done: RMQ manual ack/DLQ (TRD-08), payload validation on every RPC handler (TRD-11),
-  Resend retry/timeout (TRD-12), mimetype whitelist (TRD-15), `recreate-db.ts` prod guard (TRD-21).
+  SMTP retry/timeout (TRD-12), mimetype whitelist (TRD-15), `recreate-db.ts` prod guard (TRD-21).
   Test `redis.controller.spec.ts` is stale (imports the deleted controller).

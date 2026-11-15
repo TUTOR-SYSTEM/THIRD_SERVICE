@@ -1,4 +1,4 @@
-import { BadRequestException, Controller } from '@nestjs/common';
+import { BadRequestException, Controller, NotFoundException } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { z } from 'zod';
 import { DELETABLE_PREFIX_PATTERN, RedisService } from './redis.service';
@@ -46,10 +46,19 @@ export class RedisRpcController {
     return this.redisService.exists(payload.key);
   }
 
+  // Remaining TTL in seconds (-1 = no expiry, -2 = missing) — used to report lockout wait time.
+  @MessagePattern('redis.ttl')
+  ttl(@Payload() payload: { key: string }) {
+    return this.redisService.ttl(payload?.key as string);
+  }
+
   // Atomic read-and-delete for single-use tokens (reset-password): only one caller gets the value.
+  // Missing or already-consumed key => NotFoundException (404) instead of an empty reply.
   @MessagePattern('redis.getdel')
-  getdel(@Payload() payload?: { key: string }) {
-    return this.redisService.getdel(payload?.key as string);
+  async getdel(@Payload() payload?: { key: string }) {
+    const value = await this.redisService.getdel(payload?.key as string);
+    if (value === null) throw new NotFoundException('Redis key not found');
+    return value;
   }
 
   /**

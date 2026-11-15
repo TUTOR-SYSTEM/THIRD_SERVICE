@@ -12,7 +12,7 @@ email, notification, uploads, plus the Redis infra module).
 the right shape.** This repo has three real shapes — see `.claude/rules/nestjs-feature-pattern.md`:
 - A new Postgres-backed domain resource → full layered feature, use `notification`
   (`src/features/notification/*`, `src/packages/entities/notification/*`) as the reference.
-- A thin wrapper around one external API with no DB table (like `email`/Resend) → stateless
+- A thin wrapper around one external API with no DB table (like `email`/Nodemailer SMTP) → stateless
   service + controller only, no repository, no Zod entities.
 - A thin wrapper around one external SDK client (like `uploads`/S3) → service + provider +
   interface, no repository, no Zod entities.

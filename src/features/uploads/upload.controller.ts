@@ -12,7 +12,6 @@ import {
   Res,
   UploadedFile,
   UploadedFiles,
-  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -27,8 +26,8 @@ import {
   ApiResponse as SwaggerResponse,
 } from '@nestjs/swagger';
 import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
-import { CurrentUser, Roles } from '@packages/decorators';
-import { RolesGuard, type JwtGuardUser } from '@packages/guards';
+import { CurrentUser } from '@packages/decorators';
+import { type JwtGuardUser } from '@packages/guards';
 import { StatusCodes } from 'http-status-codes';
 import { MAX_UPLOAD_FILES } from './upload.constant';
 import { UploadService } from './upload.service';
@@ -133,8 +132,6 @@ export class UploadController {
     }
   }
 
-  @UseGuards(RolesGuard)
-  @Roles('ADMIN')
   @Delete('delete/:key')
   @HttpCode(StatusCodes.OK)
   @ApiOperation({ summary: 'Delete file' })

@@ -80,6 +80,16 @@ describe('RedisRpcController atomic patterns', () => {
     expect(service.getdel).toHaveBeenCalledWith('reset-password:abc');
   });
 
+  it('redis.getdel replies 404 when the key is missing or already consumed', async () => {
+    const service = makeService();
+    service.getdel.mockResolvedValue(null);
+    const controller = new RedisRpcController(service);
+
+    await expect(controller.getdel({ key: 'reset-password:gone' })).rejects.toMatchObject({
+      status: 404,
+    });
+  });
+
   it('redis.incr replies with the count in an object (never undefined)', async () => {
     const service = makeService();
     service.incrWithWindow.mockResolvedValue(2);

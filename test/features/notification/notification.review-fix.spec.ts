@@ -59,10 +59,10 @@ describe('F-12 notification ownership (RPC -> service -> repo)', () => {
     },
   );
 
-  it('getById matches userId OR senderId (me appears twice)', async () => {
+  it('getById is recipient-only (me appears once)', async () => {
     const { rpc, wheres } = build([{ id: ID }]);
     await rpc.getById({ id: ID, userId: ME, role: 'STUDENT' } as any);
-    expect(params(wheres).filter((p) => p === ME)).toHaveLength(2);
+    expect(params(wheres).filter((p) => p === ME)).toHaveLength(1);
   });
 
   it('markAsRead/delete are recipient-only (me appears once)', async () => {
@@ -74,12 +74,18 @@ describe('F-12 notification ownership (RPC -> service -> repo)', () => {
     expect(params(b.wheres).filter((p) => p === ME)).toHaveLength(1);
   });
 
-  it.each(['getById', 'markAsRead', 'del'] as const)(
-    '%s as ADMIN is not restricted by userId',
+  it('getById as ADMIN is still recipient-scoped', async () => {
+    const { rpc, wheres } = build([{ id: ID }]);
+    await (rpc as any).getById({ id: ID, userId: ME, role: 'ADMIN' });
+    expect(params(wheres)).toContain(ME);
+  });
+
+  it.each(['markAsRead', 'del'] as const)(
+    '%s as ADMIN is still recipient-scoped',
     async (method) => {
       const { rpc, wheres } = build([{ id: ID }]);
       await (rpc as any)[method]({ id: ID, userId: ME, role: 'ADMIN' });
-      expect(params(wheres)).not.toContain(ME);
+      expect(params(wheres)).toContain(ME);
     },
   );
 });
@@ -207,10 +213,10 @@ describe('F-34/F-21 notification RPC payload parsing', () => {
 });
 
 describe('extra cases (verify)', () => {
-  it('sender can getById but markAsRead/delete 404 (recipient-only scoping)', () => {
+  it('sender cannot getById or markAsRead/delete a notification addressed to someone else', () => {
     const a = build([{ id: ID }]);
     return a.rpc.getById({ id: ID, userId: ME, role: 'TUTOR' } as any).then(() => {
-      expect(params(a.wheres).filter((p) => p === ME)).toHaveLength(2);
+      expect(params(a.wheres).filter((p) => p === ME)).toHaveLength(1);
     });
   });
   it('role undefined -> 403 on create', async () => {

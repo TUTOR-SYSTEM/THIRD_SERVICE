@@ -17,7 +17,7 @@ function payloadPipe(method: keyof EmailRpcController) {
 }
 
 describe('EmailRpcController.sendVerifyEmail (email.sendVerifyEmail)', () => {
-  const emailService = { sendVerifyEmail: jest.fn(), sendForgotPasswordMail: jest.fn() };
+  const emailService = { sendVerifyEmail: jest.fn(), sendPasswordResetOtpMail: jest.fn() };
   let rpc: EmailRpcController;
 
   beforeEach(() => {
@@ -27,14 +27,18 @@ describe('EmailRpcController.sendVerifyEmail (email.sendVerifyEmail)', () => {
   });
 
   it('is bound to the email.sendVerifyEmail message pattern', () => {
-    expect(Reflect.getMetadata(PATTERN_METADATA, EmailRpcController.prototype.sendVerifyEmail)).toEqual(
-      ['email.sendVerifyEmail'],
-    );
+    expect(
+      Reflect.getMetadata(PATTERN_METADATA, EmailRpcController.prototype.sendVerifyEmail),
+    ).toEqual(['email.sendVerifyEmail']);
   });
 
   it('forwards a valid payload to EmailService.sendVerifyEmail and returns its result', async () => {
     const pipe = payloadPipe('sendVerifyEmail');
-    const payload = pipe.transform({ to: 'new@x.dev', verifyToken: VALID_TOKEN, displayName: 'Lan' });
+    const payload = pipe.transform({
+      to: 'new@x.dev',
+      verifyToken: VALID_TOKEN,
+      displayName: 'Lan',
+    });
 
     await expect(rpc.sendVerifyEmail(payload as never)).resolves.toEqual({ id: 'v1' });
     expect(emailService.sendVerifyEmail).toHaveBeenCalledWith({
@@ -52,17 +56,29 @@ describe('EmailRpcController.sendVerifyEmail (email.sendVerifyEmail)', () => {
       await rpc.sendVerifyEmail(payload as never);
     }
 
-    expect(emailService.sendVerifyEmail).toHaveBeenNthCalledWith(1, expect.objectContaining({ displayName: '' }));
-    expect(emailService.sendVerifyEmail).toHaveBeenNthCalledWith(2, expect.objectContaining({ displayName: '' }));
+    expect(emailService.sendVerifyEmail).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ displayName: '' }),
+    );
+    expect(emailService.sendVerifyEmail).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ displayName: '' }),
+    );
   });
 
   it.each([
     ['missing to', { verifyToken: VALID_TOKEN, displayName: 'A' }],
     ['malformed email', { to: 'not-an-email', verifyToken: VALID_TOKEN, displayName: 'A' }],
-    ['email over 254 chars', { to: `${'a'.repeat(250)}@tutor.dev`, verifyToken: VALID_TOKEN, displayName: 'A' }],
+    [
+      'email over 254 chars',
+      { to: `${'a'.repeat(250)}@tutor.dev`, verifyToken: VALID_TOKEN, displayName: 'A' },
+    ],
     ['verifyToken not a uuid', { to: 'a@tutor.dev', verifyToken: 'abc', displayName: 'A' }],
     ['missing verifyToken', { to: 'a@tutor.dev', displayName: 'A' }],
-    ['displayName over 200 chars', { to: 'a@tutor.dev', verifyToken: VALID_TOKEN, displayName: 'x'.repeat(201) }],
+    [
+      'displayName over 200 chars',
+      { to: 'a@tutor.dev', verifyToken: VALID_TOKEN, displayName: 'x'.repeat(201) },
+    ],
     ['non-string displayName', { to: 'a@tutor.dev', verifyToken: VALID_TOKEN, displayName: 42 }],
     ['null payload', null],
   ])('rejects an invalid payload (%s) before reaching EmailService', (_label, bad) => {

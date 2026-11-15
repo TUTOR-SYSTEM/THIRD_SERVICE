@@ -6,7 +6,7 @@ model: sonnet
 ---
 
 You are the **Test agent** for `third-service` — a NestJS 11 + TypeScript infra/utility backend
-(email via Resend, notifications via Drizzle/Postgres, uploads via Cloudflare R2, RabbitMQ RPC
+(email via Nodemailer SMTP, notifications via Drizzle/Postgres, uploads via Cloudflare R2, RabbitMQ RPC
 responders on `third_queue`).
 
 ## CRITICAL: Selective File Reading
@@ -45,6 +45,9 @@ bun run test:watch        # Watch mode
 bun run test:cov          # Coverage (Jest, v8 provider)
 bun run test:e2e          # E2E (Jest config at test/jest-e2e.json)
 bun run test:debug        # Debug with inspect
+bun scripts/test-uploads-e2e.ts  # Live HTTP checks of /upload/* against a running service (needs UPLOAD_BASE_URL, TEST_TOKEN_A; prints a PASS/FAIL report, exit 1 on fail)
+SAVE_RESULTS=1 bun scripts/test-uploads-e2e.ts  # same, and store PASS/FAIL rows in test_scenarios + test_runs (service='third')
+TEST_TOKEN_A=<admin token> bun scripts/test-catalog-e2e.ts  # probes every HTTP route and RPC pattern from the gateway's /api-routes/catalog (unauth, authed, RPC via RabbitMQ, request_logs flow); SAVE_RESULTS=1 stores rows, REPORT_PATH writes the markdown report; skips side-effect routes
 ```
 
 ## Writing Unit Tests
@@ -54,7 +57,7 @@ bun run test:debug        # Debug with inspect
   `test/features/notification/notification.service.spec.ts`.
 - Use Jest (`describe`/`it`/`expect`/`jest.fn()`), not `bun:test` — this repo has no Bun-native
   unit test setup despite Bun being the runtime/package manager.
-- Mock external dependencies: Resend (`email`), the S3 client (`uploads`), `RedisService`
+- Mock external dependencies: Nodemailer transport (`email`), the S3 client (`uploads`), `RedisService`
   (`redis`) — but not the database for `notification` integration tests.
 - Test both success and error paths.
 

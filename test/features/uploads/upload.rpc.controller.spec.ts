@@ -110,7 +110,7 @@ describe('UploadRpcController', () => {
     await expect(controller.download({ key: 'uploads/2024/notes.txt', ...TUTOR })).resolves.toEqual(
       presigned,
     );
-    expect(service.presignDownload).toHaveBeenCalledWith('uploads/2024/notes.txt', TUTOR);
+    expect(service.presignDownload).toHaveBeenCalledWith('uploads/2024/notes.txt', { ...TUTOR, authorized: false });
   });
 
   it('download propagates the service refusal (not owner) without a reply body', async () => {

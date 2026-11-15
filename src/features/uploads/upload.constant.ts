@@ -14,6 +14,8 @@ export const OWNER_METADATA_KEY = 'owner-id';
 /** Roles allowed to upload (PARENT is rejected). Objects are owner-tagged, so students only read their own. */
 export const UPLOADER_ROLES: ReadonlySet<string> = new Set(['ADMIN', 'TUTOR', 'STUDENT']);
 export const UPLOAD_KEY_PREFIX = `${UPLOAD_DIR}/`;
+/** Bài nộp của học sinh lưu riêng, tách khỏi tài liệu do gia sư/admin tải lên. */
+export const SUBMISSION_KEY_PREFIX = 'submissions/';
 
 /** Images are decoded and re-encoded to JPEG by sharp, so the stored object is always image/jpeg. */
 export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif']);

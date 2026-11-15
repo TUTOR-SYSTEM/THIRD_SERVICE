@@ -31,8 +31,10 @@ third-service owns or should query that data. Concretely:
   query into a table this service doesn't semantically own.
 - **The `notifications` table itself does reference `classes.id`/`users.id`** (`classId`,
   `studentId`, `userId`, `senderId` FKs) — those FK columns exist and are used by
-  `NotificationRepository`, but the referenced rows are never read back through those tables
-  from this repo; they're stored as opaque ids.
+  `NotificationRepository`. Postgres enforces them for real: `senderId`/`userId`/`studentId` must
+  exist in `users` and `classId` in `classes`, or create fails with "Referenced record not found
+  (foreign key violation)" (400). Keep the referenced rows present in this database (the sample
+  class `MATH10-A` and the existing users were seeded for Swagger; see the memory note).
 - If you're asked to trim `schema.ts` down to just `notifications` + `users` (the same cleanup
   `user`'s schema went through — see that repo's `[[trimmed-feature-set]]` memory for the
   pattern), that's a deliberate migration-generating change — confirm with the user first, don't

@@ -5,13 +5,13 @@ import { ZodValidationPipe } from '@packages/pipes/zod-validation.pipe';
 import { EmailService } from './email.service';
 
 /**
- * RPC payload for the reset-password mail. `resetToken` is the reset `jti` (a random UUID minted
- * by `user`), and `to` must be a real address: without this, any publisher could make the
- * configured `MAIL_FROM` send mail to an arbitrary recipient (TRD3-15).
+ * RPC payload for the password-reset code mail. `otp` is the 6-digit code minted by `user`, and
+ * `to` must be a real address: without this, any publisher could make the configured `MAIL_FROM`
+ * send mail to an arbitrary recipient (TRD3-15).
  */
-const forgotPasswordPayloadSchema = z.object({
+const passwordResetOtpPayloadSchema = z.object({
   to: z.email().max(254),
-  resetToken: z.uuid(),
+  otp: z.string().regex(/^\d{6}$/),
   displayName: z.string().max(200).nullish(),
 });
 
@@ -39,14 +39,14 @@ export class EmailRpcController {
     return this.emailService.testSendEmailService();
   }
 
-  @MessagePattern('email.sendForgotPasswordMail')
-  sendForgotPasswordMail(
-    @Payload(new ZodValidationPipe(forgotPasswordPayloadSchema))
-    payload: z.infer<typeof forgotPasswordPayloadSchema>,
+  @MessagePattern('email.sendPasswordResetOtp')
+  sendPasswordResetOtp(
+    @Payload(new ZodValidationPipe(passwordResetOtpPayloadSchema))
+    payload: z.infer<typeof passwordResetOtpPayloadSchema>,
   ) {
-    return this.emailService.sendForgotPasswordMail({
+    return this.emailService.sendPasswordResetOtpMail({
       to: payload.to,
-      resetToken: payload.resetToken,
+      otp: payload.otp,
       displayName: payload.displayName ?? '',
     });
   }

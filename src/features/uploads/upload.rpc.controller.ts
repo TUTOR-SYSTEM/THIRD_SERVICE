@@ -33,7 +33,11 @@ export class UploadRpcController {
     const actor = this.requireActor(payload);
     this.uploadService.assertUploaderRole(actor.role);
     await this.uploadService.consumeUploadQuota(actor.userId, 1);
-    return this.uploadService.upload(this.reconstruct(payload.file), 'uploads', actor.userId);
+    return this.uploadService.upload(
+      this.reconstruct(payload.file),
+      this.folderFor(actor.role),
+      actor.userId,
+    );
   }
 
   @MessagePattern('upload.uploadMultiple')
@@ -48,7 +52,7 @@ export class UploadRpcController {
     await this.uploadService.consumeUploadQuota(actor.userId, payload.files.length);
     return this.uploadService.uploadMultiple(
       payload.files.map((file) => this.reconstruct(file)),
-      'uploads',
+      this.folderFor(actor.role),
       actor.userId,
     );
   }
@@ -58,8 +62,11 @@ export class UploadRpcController {
    * GET URL valid for `PRESIGNED_DOWNLOAD_TTL_SECONDS`; the bytes never cross the broker.
    */
   @MessagePattern('upload.download')
-  async download(@Payload() payload: { key: string; userId: string; role: string }) {
-    const actor = this.requireActor(payload);
+  async download(
+    @Payload() payload: { key: string; userId: string; role: string; authorized?: boolean },
+  ) {
+    // `authorized` chỉ do gateway đặt sau khi exercise.fileAccess cho phép (không đến từ client).
+    const actor = { ...this.requireActor(payload), authorized: payload.authorized === true };
     return this.uploadService.presignDownload(payload.key, actor);
   }
 
@@ -75,6 +82,11 @@ export class UploadRpcController {
     }
     await this.uploadService.delete(payload.key);
     return { ok: true, key: payload.key };
+  }
+
+  /** Học sinh upload (bài nộp) vào thư mục riêng; ADMIN/TUTOR dùng thư mục tài liệu chung. */
+  private folderFor(role: string): string {
+    return role === 'STUDENT' ? 'submissions' : 'uploads';
   }
 
   private requireActor(payload: { userId?: unknown; role?: unknown }): {

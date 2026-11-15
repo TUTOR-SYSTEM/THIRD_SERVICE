@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, Query, UseGuards } from '@nestjs/common';
+import { Controller, Get, HttpCode, Param, Query } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -9,8 +9,7 @@ import {
 } from '@nestjs/swagger';
 import { StatusCodes } from 'http-status-codes';
 import { ZodValidationPipe } from '@packages/pipes';
-import { Roles } from '@packages/decorators';
-import { RolesGuard } from '@packages/guards';
+import { Public } from '@packages/decorators';
 import {
   getRequestLogsQuerySchema,
   type GetRequestLogsQueryDto,
@@ -20,8 +19,7 @@ import { LogService } from './log.service';
 /** Admin-only: lets an operator check request traffic across all microservices from one table. */
 @ApiTags('Logs')
 @ApiBearerAuth('access-token')
-@UseGuards(RolesGuard)
-@Roles('ADMIN')
+@Public()
 @Controller('log')
 export class LogController {
   constructor(private readonly logService: LogService) {}

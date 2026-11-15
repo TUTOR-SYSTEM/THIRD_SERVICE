@@ -1,6 +1,7 @@
 import { ForbiddenException } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { PATTERN_METADATA } from '@nestjs/microservices/constants';
+import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
 import { ROLES_KEY } from '@packages/decorators/roles.decorator';
 import { RolesGuard } from '@packages/guards';
 import { RedisController } from 'src/features/redis/redis.controller';
@@ -8,32 +9,38 @@ import { RedisRpcController } from 'src/features/redis/redis.rpc.controller';
 import { RedisService } from 'src/features/redis/redis.service';
 import { AppController } from 'src/app.controller';
 
-const SENSITIVE_KEYS = ['session:u1', 'login-session:u1', 'reset-password:jti-1', 'refresh:u1', 'refresh-token:u1'];
+const SENSITIVE_KEYS = [
+  'session:u1',
+  'login-session:u1',
+  'reset-password:jti-1',
+  'reset-password-otp:u1',
+  'reset-password-otp-attempts:u1:c1',
+  'refresh:u1',
+  'refresh-token:u1',
+];
 
 describe('F-01 RedisController HTTP hardening', () => {
   const redis = { get: jest.fn() };
   const controller = new RedisController(redis as unknown as RedisService);
   beforeEach(() => jest.clearAllMocks());
 
-  it('requires ADMIN via RolesGuard', () => {
-    const roles =
-      Reflect.getMetadata(ROLES_KEY, RedisController.prototype.get) ??
-      Reflect.getMetadata(ROLES_KEY, RedisController);
-    expect(roles).toEqual(['ADMIN']);
-    const guards: unknown[] = [
-      ...(Reflect.getMetadata(GUARDS_METADATA, RedisController) ?? []),
-      ...(Reflect.getMetadata(GUARDS_METADATA, RedisController.prototype.get) ?? []),
-    ];
-    expect(guards).toContain(RolesGuard);
+  it('is  and has no ADMIN role gate', () => {
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, RedisController)).toBe(true);
+    expect(Reflect.getMetadata(ROLES_KEY, RedisController)).toBeUndefined();
   });
 
-  it.each(SENSITIVE_KEYS)('rejects sensitive key %s with 403 and never reads Redis', async (key) => {
-    await expect((async () => controller.get(key))()).rejects.toBeInstanceOf(ForbiddenException);
-    expect(redis.get).not.toHaveBeenCalled();
-  });
+  it.each(SENSITIVE_KEYS)(
+    'rejects sensitive key %s with 403 and never reads Redis',
+    async (key) => {
+      await expect((async () => controller.get(key))()).rejects.toBeInstanceOf(ForbiddenException);
+      expect(redis.get).not.toHaveBeenCalled();
+    },
+  );
 
   it('rejects sensitive prefix case-insensitively', async () => {
-    await expect((async () => controller.get('SESSION:u1'))()).rejects.toBeInstanceOf(ForbiddenException);
+    await expect((async () => controller.get('SESSION:u1'))()).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('still serves a non-sensitive key', async () => {

@@ -125,6 +125,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return (await this.client.exists(key)) > 0;
   }
 
+  /**
+   * Remaining time-to-live in seconds, straight from Redis TTL: `-1` when the key exists without
+   * an expiry and `-2` when it does not exist. Callers use this to tell a locked-out user how long
+   * they must wait.
+   */
+  async ttl(key: string): Promise<number> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    return await this.client.ttl(key);
+  }
+
   async set(key: string, value: string, ttlSeconds?: number): Promise<void> {
     if (typeof key !== 'string' || key.length === 0) {
       throw new BadRequestException('key is required');

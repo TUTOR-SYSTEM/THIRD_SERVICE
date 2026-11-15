@@ -14,7 +14,7 @@ Base: `http://localhost:8888`
 | POST | `/auth/login` | Public | email, password |
 | POST | `/auth/refresh` | Public | refreshToken |
 | POST | `/auth/forgot-password` | Public | email |
-| POST | `/auth/reset-password` | Public | token, newPassword |
+| POST | `/auth/reset-password` | Public | email, otp, password, confirmPassword |
 
 - Access token TTL: 3h (default, configurable via `JWT_ACCESS_EXPIRES_SECONDS`)
 - Refresh token TTL: 7d (default, configurable via `JWT_REFRESH_EXPIRES_SECONDS`)

@@ -4,7 +4,7 @@
 
 `third-service` is one of four independent NestJS 11 + TypeScript repos in a tutoring-platform
 backend (`gateway`, `user`, `tutor-service`, `third-service`). It owns the platform's
-**infra/utility features**: transactional email (Resend), in-app notifications (Postgres via
+**infra/utility features**: transactional email (Nodemailer over SMTP), in-app notifications (Postgres via
 Drizzle ORM), and file uploads (Cloudflare R2 via the S3 API, with Sharp for image resizing). It
 also runs a RabbitMQ RMQ listener (`third_queue`) whose `@MessagePattern` responders the other
 services call — including generic `redis.get`/`redis.set`/`redis.del` KV patterns (e.g. `user`
@@ -47,7 +47,7 @@ and **not auth/user/admin/student** (that's `user`). See
 | Database         | PostgreSQL via Drizzle ORM + `postgres.js` — used by **only** the `notification` feature |
 | Cache            | Redis (`ioredis`) — exposed to other services via the `redis.*` RPC patterns |
 | Messaging        | RabbitMQ — RMQ microservice listener (`third_queue`) with `@MessagePattern` responders on all 4 features (no pub/sub) |
-| Email            | Resend (`resend` package) — **not** Nodemailer despite the dependency being present |
+| Email            | Nodemailer (`nodemailer` package) over SMTP |
 | File storage     | Cloudflare R2 (S3-compatible) via `@aws-sdk/client-s3`, image resizing via `sharp` |
 | Validation       | Zod v4 (via custom `ZodValidationPipe`) — only `notification` has schemas |
 | API Docs         | @nestjs/swagger                                                    |
@@ -58,7 +58,7 @@ and **not auth/user/admin/student** (that's `user`). See
 | Containerization | Docker Compose / Podman Compose                                    |
 
 `cloudinary` is a dependency but is **not actually used** anywhere in `src/` (only referenced as
-a leftover Swagger tag in `main.ts`) — file uploads go through Cloudflare R2, not Cloudinary.
+a leftover Swagger tag in `main.ts`, now removed) — file uploads go through Cloudflare R2, not Cloudinary.
 
 ## Commands
 
@@ -108,7 +108,7 @@ src/
 │                                  # for FK refs) is actually queried; the rest is vestigial
 ├── features/
 │   ├── email/                    # Stateless: EmailController (health-check-ish test route) +
-│   │   │                         # EmailService wrapping Resend. No repository, no entities.
+│   │   │                         # EmailService wrapping a Nodemailer SMTP transport. No repository, no entities.
 │   │   ├── email.controller.ts
 │   │   ├── email.rpc.controller.ts # @MessagePattern('email.*') mirror, reached via gateway RPC
 │   │   ├── email.service.ts
@@ -150,7 +150,7 @@ src/
 │   │                              # A variable that can't be filled = failed run, nothing sent.
 │   └── log/                      # Owns `request_logs` (centralized cross-service request logging —
 │                                  # see gateway's `LogController` for the admin-facing read API).
-│                                  # log.controller.ts (HTTP, admin) + log.rpc.controller.ts
+│                                  # log.controller.ts (HTTP, @Public) + log.rpc.controller.ts
 │                                  # (`log.create`/`log.query`/`log.trace`, reached by every
 │                                  # service's LoggerInterceptor/TraceContextInterceptor via
 │                                  # `@packages/context/log-sink`) → log.service.ts →
@@ -228,9 +228,11 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `THIRD_QUEUE`                             | Overrides the RMQ listener queue name (default `third_queue`) |
 | `GATEWAY_BASE_URL`                        | Where `testscenario.run` fires its real requests (default `http://localhost:8888`) |
 | `TEST_ACCOUNT_ADMIN` / `TEST_ACCOUNT_TUTOR` / `TEST_ACCOUNT_STUDENT` / `TEST_ACCOUNT_PARENT` | `email:password` of the per-role test accounts a scenario's `authProfile` runs as (logged in through the gateway, tokens cached in memory). Unset → runs with that profile fail with "not configured". `scripts/seed-user.ts` creates one account per role locally |
-| `RESEND_API_KEY`                          | Required — `EmailService` throws at construction if missing |
-| `MAIL_FROM`                               | Required — sender address for Resend        |
-| `PASSWORD_RESET_URL_BASE`                 | Base URL used in the forgot-password email link (default `http://localhost:3000`) |
+| `SMTP_HOST`                               | Required — SMTP server host; `EmailService` throws at construction if missing |
+| `SMTP_PORT` / `SMTP_SECURE`               | Default `587` / `false` (`SMTP_SECURE` auto-true on 465) |
+| `SMTP_USER` / `SMTP_PASS`                 | Optional SMTP auth, but must be set together |
+| `MAIL_FROM`                               | Required — sender address for outgoing mail |
+| `PASSWORD_RESET_URL_BASE`                 | Base URL used in the verify-email link (the reset flow sends a code, no link) (default `http://localhost:3000`) |
 | `CLOUDFLARE_R2_ENDPOINT` / `CLOUDFLARE_R2_ACCESS_KEY_ID` / `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | Required — `UploadService` throws "R2 not configured" without them |
 | `CLOUDFLARE_R2_REGION`                    | Default `auto`                              |
 | `CLOUDFLARE_R2_BUCKET`                    | Default `tutor`                             |
@@ -239,14 +241,14 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 
 ## Key Files to Know
 
-- `src/main.ts` — Bootstrap, Swagger tag list (stale — see `.claude/rules/conventions.md`), RMQ
+- `src/main.ts` — Bootstrap, Swagger tag list (must match `@ApiTags` usage — see `.claude/rules/conventions.md`), RMQ
   microservice listener setup
 - `src/features/redis/redis.rpc.controller.ts` — Reference RPC responder (generic KV patterns)
 - `src/features/notification/*` — The only full controller→service→repository→module feature
 - `src/features/log/log.gateway.ts` — This repo's first WebSocket gateway (`/logs`, admin-only
   realtime feed of new `request_logs` rows)
 - `src/features/uploads/upload.provider.ts` — S3Client factory for Cloudflare R2
-- `src/features/email/email.service.ts` — Resend wrapper
+- `src/features/email/email.service.ts` — Nodemailer SMTP wrapper
 - `src/packages/guards/` — `JwtAuthGuard`, `LanguageGuard`, `TokenBucketGuard` (all three global)
 
 ## Project Rules

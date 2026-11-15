@@ -1,7 +1,13 @@
-import { BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Logger } from '@nestjs/common';
-import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  GetObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  type S3Client,
+} from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { UploadService } from 'src/features/uploads/upload.service';
 import type { MulterFile } from 'src/features/uploads/upload.interface';
@@ -64,13 +70,17 @@ describe('UploadService', () => {
       expect(String(warn.mock.calls[0][0])).toContain('not configured');
     });
 
-    it('logs an access-denied hint on HTTP 403 and does not throw', async () => {
+    it('logs the real error name, message and status on HTTP 403 with a hint, and does not throw', async () => {
       const { s3, send } = makeS3();
       send.mockRejectedValue(Object.assign(new Error('denied'), { name: 'AccessDenied', $metadata: { httpStatusCode: 403 } }));
       const error = jest.spyOn(Logger.prototype, 'error');
 
       await expect(new UploadService(s3, config).onModuleInit()).resolves.toBeUndefined();
-      expect(String(error.mock.calls[0][0])).toContain('Access Denied');
+      const line = String(error.mock.calls[0][0]);
+      expect(line).toContain('AccessDenied');
+      expect(line).toContain('denied');
+      expect(line).toContain('status=403');
+      expect(line).toContain('same account');
     });
 
     it('logs the error name and status for other failures without throwing', async () => {
@@ -221,13 +231,23 @@ describe('UploadService', () => {
   });
 
   describe('delete', () => {
-    it('issues a DeleteObject for the given key', async () => {
+    it('checks the object exists (HeadObject) then issues a DeleteObject for the given key', async () => {
       const { s3, send } = makeS3();
 
       await new UploadService(s3, config).delete('uploads/x.jpg');
 
-      expect(send.mock.calls[0][0]).toBeInstanceOf(DeleteObjectCommand);
-      expect(send.mock.calls[0][0].input).toEqual({ Bucket: 'tutor-bucket', Key: 'uploads/x.jpg' });
+      expect(send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
+      expect(send.mock.calls[1][0]).toBeInstanceOf(DeleteObjectCommand);
+      expect(send.mock.calls[1][0].input).toEqual({ Bucket: 'tutor-bucket', Key: 'uploads/x.jpg' });
+    });
+
+    it('throws NotFound (404) and does not delete when the key does not exist', async () => {
+      const { s3, send } = makeS3();
+      send.mockRejectedValueOnce(Object.assign(new Error('nope'), { name: 'NotFound', $metadata: { httpStatusCode: 404 } }));
+
+      await expect(new UploadService(s3, config).delete('uploads/missing.jpg')).rejects.toBeInstanceOf(NotFoundException);
+      expect(send).toHaveBeenCalledTimes(1);
+      expect(send.mock.calls[0][0]).toBeInstanceOf(HeadObjectCommand);
     });
 
     it('rejects when no S3 client is configured', async () => {
@@ -240,6 +260,6 @@ describe('UploadService', () => {
 
     await new UploadService(s3, makeConfig({})).delete('uploads/k');
 
-    expect(send.mock.calls[0][0].input.Bucket).toBe('tutor');
+    expect(send.mock.calls[1][0].input.Bucket).toBe('tutor');
   });
 });

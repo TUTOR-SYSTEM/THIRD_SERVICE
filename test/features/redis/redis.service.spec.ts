@@ -34,6 +34,7 @@ jest.mock('ioredis', () => ({
       get: jest.fn(),
       set: jest.fn().mockResolvedValue('OK'),
       del: jest.fn().mockResolvedValue(2),
+      ttl: jest.fn(),
       quit: jest.fn().mockResolvedValue('OK'),
       disconnect: jest.fn(),
     };
@@ -150,6 +151,26 @@ describe('RedisService', () => {
       await expect(service.get('k')).resolves.toBe('v1');
       await expect(service.get('missing')).resolves.toBeNull();
       expect(lastClient().get).toHaveBeenCalledWith('k');
+    });
+
+    it('ttl returns the remaining seconds and passes sentinel values through', async () => {
+      const service = new RedisService(makeConfig({}));
+      lastClient()
+        .ttl.mockResolvedValueOnce(42)
+        .mockResolvedValueOnce(-1)
+        .mockResolvedValueOnce(-2);
+
+      await expect(service.ttl('k')).resolves.toBe(42);
+      await expect(service.ttl('no-expiry')).resolves.toBe(-1);
+      await expect(service.ttl('missing')).resolves.toBe(-2);
+      expect(lastClient().ttl).toHaveBeenCalledWith('k');
+    });
+
+    it('ttl rejects an empty key', async () => {
+      const service = new RedisService(makeConfig({}));
+
+      await expect(service.ttl('')).rejects.toBeInstanceOf(BadRequestException);
+      expect(lastClient().ttl).not.toHaveBeenCalled();
     });
 
     it('set uses EX when ttlSeconds is a positive number', async () => {

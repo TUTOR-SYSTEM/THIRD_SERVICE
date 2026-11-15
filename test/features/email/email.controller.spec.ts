@@ -8,21 +8,14 @@ import { Reflector } from '@nestjs/core';
 describe('EmailController / EmailRpcController', () => {
   const emailService = {
     testSendEmailService: jest.fn(),
-    sendForgotPasswordMail: jest.fn(),
+    sendPasswordResetOtpMail: jest.fn(),
   };
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('requires the ADMIN role and is no longer public', () => {
+  it('is @Public (no access token required)', () => {
     const reflector = new Reflector();
-    const isPublic = reflector.get<boolean>(
-      IS_PUBLIC_KEY,
-      EmailController.prototype.testSendEmailController,
-    );
-    expect(isPublic).toBeFalsy();
-    expect(reflector.get(ROLES_KEY, EmailController.prototype.testSendEmailController)).toEqual([
-      'ADMIN',
-    ]);
+    expect(reflector.get<boolean>(IS_PUBLIC_KEY, EmailController)).toBe(true);
   });
 
   it('HTTP GET /emails delegates to testSendEmailService and returns its result', async () => {
@@ -47,12 +40,12 @@ describe('EmailController / EmailRpcController', () => {
     await expect(rpc.testSendEmail()).resolves.toEqual({ id: 'm2' });
   });
 
-  it('RPC email.sendForgotPasswordMail forwards the payload unchanged', async () => {
-    const payload = { to: 'a@b.c', resetToken: 'tok', displayName: 'A' };
-    emailService.sendForgotPasswordMail.mockResolvedValue({ id: 'm3' });
+  it('RPC email.sendPasswordResetOtp forwards the validated payload', async () => {
+    const payload = { to: 'a@b.c', otp: '482931', displayName: 'A' };
+    emailService.sendPasswordResetOtpMail.mockResolvedValue({ id: 'm3' });
     const rpc = new EmailRpcController(emailService as unknown as EmailService);
 
-    await expect(rpc.sendForgotPasswordMail(payload)).resolves.toEqual({ id: 'm3' });
-    expect(emailService.sendForgotPasswordMail).toHaveBeenCalledWith(payload);
+    await expect(rpc.sendPasswordResetOtp(payload)).resolves.toEqual({ id: 'm3' });
+    expect(emailService.sendPasswordResetOtpMail).toHaveBeenCalledWith(payload);
   });
 });
