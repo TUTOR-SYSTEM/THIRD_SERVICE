@@ -3,7 +3,7 @@ import { RedisRpcController } from 'src/features/redis/redis.rpc.controller';
 import { RedisService } from 'src/features/redis/redis.service';
 
 describe('RedisRpcController', () => {
-  const redis = { get: jest.fn(), set: jest.fn(), del: jest.fn() };
+  const redis = { get: jest.fn(), set: jest.fn(), del: jest.fn(), ttl: jest.fn() };
   const controller = new RedisRpcController(redis as unknown as RedisService);
 
   beforeEach(() => jest.clearAllMocks());
@@ -12,8 +12,14 @@ describe('RedisRpcController', () => {
     ['redis.get', 'get'],
     ['redis.set', 'set'],
     ['redis.del', 'del'],
+    ['redis.ttl', 'ttl'],
   ])('binds %s to the %s handler', (pattern, method) => {
-    expect(Reflect.getMetadata(PATTERN_METADATA, RedisRpcController.prototype[method as keyof RedisRpcController])).toEqual([pattern]);
+    expect(
+      Reflect.getMetadata(
+        PATTERN_METADATA,
+        RedisRpcController.prototype[method as keyof RedisRpcController],
+      ),
+    ).toEqual([pattern]);
   });
 
   it('get returns the value from RedisService', async () => {
@@ -23,10 +29,19 @@ describe('RedisRpcController', () => {
     expect(redis.get).toHaveBeenCalledWith('k');
   });
 
+  it('ttl returns the remaining seconds from RedisService', async () => {
+    redis.ttl.mockResolvedValue(42);
+
+    await expect(controller.ttl({ key: 'k' })).resolves.toBe(42);
+    expect(redis.ttl).toHaveBeenCalledWith('k');
+  });
+
   it('set replies with a non-undefined ok marker so RmqProducer.send() does not see an empty reply', async () => {
     redis.set.mockResolvedValue(undefined);
 
-    await expect(controller.set({ key: 'k', value: 'v', ttlSeconds: 60 })).resolves.toEqual({ ok: true });
+    await expect(controller.set({ key: 'k', value: 'v', ttlSeconds: 60 })).resolves.toEqual({
+      ok: true,
+    });
     expect(redis.set).toHaveBeenCalledWith('k', 'v', 60);
   });
 

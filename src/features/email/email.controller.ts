@@ -1,15 +1,15 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { EmailService } from './email.service';
-import { Roles } from '@packages/decorators';
-import { RolesGuard } from '@packages/guards';
+import { Public } from '@packages/decorators';
 
-// Sends a real email on every call, so it needs a valid JWT like every other non-health route.
+// Sends a real email on every call. Currently @Public() (no access token) per the user's request.
+@ApiTags('Email')
+@Public()
 @Controller('email')
 export class EmailController {
   constructor(private readonly email: EmailService) {}
 
-  @Roles('ADMIN')
-  @UseGuards(RolesGuard)
   @Get('test')
   async testSendEmailController() {
     return await this.email.testSendEmailService();

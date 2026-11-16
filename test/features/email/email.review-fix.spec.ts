@@ -3,12 +3,16 @@ import { join } from 'path';
 import { EmailService } from 'src/features/email/email.service';
 
 const sendMock = jest.fn();
-jest.mock('resend', () => ({
-  Resend: jest.fn().mockImplementation(() => ({ emails: { send: sendMock } })),
+jest.mock('nodemailer', () => ({
+  createTransport: jest.fn(() => ({ sendMail: sendMock })),
 }));
 
 const make = (extra: Record<string, string | undefined> = {}) => {
-  const v: Record<string, string | undefined> = { RESEND_API_KEY: 're', MAIL_FROM: 'a@b.c', ...extra };
+  const v: Record<string, string | undefined> = {
+    SMTP_HOST: 'smtp.test',
+    MAIL_FROM: 'a@b.c',
+    ...extra,
+  };
   return new EmailService({
     getOrThrow: (k: string) => v[k],
     get: (k: string, d?: string) => v[k] ?? d,
@@ -18,7 +22,7 @@ const make = (extra: Record<string, string | undefined> = {}) => {
 // F-25
 describe('EmailService test email (review-fix F-25)', () => {
   beforeEach(() => {
-    sendMock.mockReset().mockResolvedValue({ data: { id: 'm' }, error: null });
+    sendMock.mockReset().mockResolvedValue({ messageId: 'm' });
     delete process.env.TEST_EMAIL_RECIPIENT;
   });
   afterEach(() => delete process.env.TEST_EMAIL_RECIPIENT);
@@ -37,7 +41,10 @@ describe('EmailService test email (review-fix F-25)', () => {
   });
 
   it('has no hardcoded personal email in the source', () => {
-    const src = readFileSync(join(__dirname, '../../../src/features/email/email.service.ts'), 'utf8');
+    const src = readFileSync(
+      join(__dirname, '../../../src/features/email/email.service.ts'),
+      'utf8',
+    );
     expect(src).not.toContain('dang04223@gmail.com');
   });
 });

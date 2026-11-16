@@ -75,6 +75,14 @@ export const ERROR_TRANSLATIONS = {
     vi: 'Thiếu mã đặt lại mật khẩu',
     en: 'Reset password token is required',
   },
+  AUTH_OTP_REQUIRED: {
+    vi: 'Vui lòng nhập mã xác nhận',
+    en: 'Verification code is required',
+  },
+  AUTH_OTP_INVALID: {
+    vi: 'Mã xác nhận phải gồm 6 chữ số',
+    en: 'Verification code must be 6 digits',
+  },
   AUTH_RESET_TOKEN_INVALID: {
     vi: 'Mã đặt lại mật khẩu không hợp lệ',
     en: 'Invalid reset password token',

@@ -10,15 +10,18 @@ child-of-parent feature, stop — that pattern belongs in `tutor-service`, not h
 `{name}.controller.ts` → `{name}.service.ts` → `{name}.repository.ts`, plus `{name}.module.ts`.
 Use this when the feature owns a Postgres table.
 
-- Controller: `@ApiTags`/`@ApiBearerAuth`, routes guarded by the global `JwtAuthGuard` (no
-  `@Public()` on `notification`'s routes). Validates body/query with
+- Controller: `@ApiTags`/`@ApiBearerAuth`, HTTP controllers `app`/`email`/`log`/`redis` are class-level `@Public()` (no access token; `notification` and `upload` stay JWT-guarded; see
+  `conventions.md`). RPC handlers never pass through the HTTP guards. Validates body/query with
   `new ZodValidationPipe<Dto>(schema)`, reads `@CurrentUser() user: JwtGuardUser`.
 - Service: validates FK-shaped ids with `checkUuidValid` (see `createNotificationService`
   checking `senderId`/`classId`/`studentId`) and throws `BadRequestException`/`NotFoundException`
-  — there is no `row.tutorId !== userId` ownership model, but `findById`/`markAsRead`/`delete`
-  take an optional `userId` and scope the row to notifications that user **received or sent**
-  (404 otherwise); the HTTP controller always passes `user.id`, and gateway's `notification.getById|
-  markAsRead|delete` payloads carry `userId`. Keep that when adding notification endpoints. Also
+  — there is no `row.tutorId !== userId` ownership model. Scoping differs per method:
+  `findById` (getById), `markAsRead`, `markAllAsRead` and `delete` are all **recipient-only**
+  (`user_id = userId`, even for ADMIN; other users' rows 404; a sender cannot read/delete a row
+  addressed to someone else). `findAll` lists rows received plus unaddressed rows the caller sent
+  (`visibleTo`). The HTTP
+  controller always passes `user.id`, and gateway's `notification.getById|markAsRead|delete` payloads
+  carry `userId`. Keep that when adding notification endpoints. Also
   exposes an internal fire-and-forget method (`createInternal`) meant to be called from other
   in-process code without the validation/exception path — currently unused (nothing in this repo
   calls it yet; it's there for a future same-process caller, not a cross-repo one — a cross-repo
@@ -37,9 +40,9 @@ Use this when the feature owns a Postgres table.
 ## Shape 2 — stateless service, no repository (`email`)
 
 `{name}.controller.ts` → `{name}.service.ts` + `{name}.module.ts`. No repository, no Zod
-entities under `src/packages/entities/` — the service wraps an external API (Resend) directly
+entities under `src/packages/entities/` — the service wraps an external transport (Nodemailer SMTP) directly
 and its methods take plain TS object params, not Zod-validated DTOs. `EmailController` currently
-exposes only a JWT-protected test route; real send methods (`sendForgotPasswordMail`) are called
+exposes only a test route (`@Public()`, no ADMIN gate); real send methods (`sendPasswordResetOtpMail`) are called
 from service code, not routed through HTTP.
 
 ## Shape 3 — provider/interface, no repository, no entities (`uploads`)
@@ -56,7 +59,7 @@ Same as every other service: `@Global()` module, no repository, exported so any 
 inject it directly.
 
 - `redis` — one `RedisService` owning the `ioredis` connection lifecycle
-  (`OnModuleDestroy`), plus `RedisController` (HTTP, `GET /redis?key=`) and
+  (`OnModuleDestroy`), plus `RedisController` (HTTP, registered in `RedisModule` so it shows in Swagger; routes mirror the RPC names: `GET /redis/get|exists|ttl`, `POST /redis/set|getdel|incr` (`getdel` replies 404 when the key is missing, RPC and HTTP alike), `DELETE /redis/del|delByPrefix`; every route returns 403 for sensitive key families) and
   `RedisRpcController` (`@MessagePattern('redis.get'|'redis.set')` +
   `@EventPattern('redis.del')`) — both call the same unmodified `RedisService`.
 

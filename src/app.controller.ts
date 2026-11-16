@@ -1,3 +1,4 @@
+import { Public } from '@packages/decorators';
 import { Controller, Get, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse as SwaggerResponse } from '@nestjs/swagger';
 import { AppService } from './app.service';
@@ -13,6 +14,7 @@ export class AppController {
     private readonly redisService: RedisService,
   ) {}
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'Health check', description: 'Returns a simple health check response' })
   @SwaggerResponse({

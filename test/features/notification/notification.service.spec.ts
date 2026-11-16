@@ -140,7 +140,7 @@ describe('NotificationService', () => {
 
   describe('actor scoping', () => {
     const student = { userId: ID, role: 'STUDENT' };
-    it('non-admin scopes by userId; ADMIN passes undefined', async () => {
+    it('markAsRead/delete/findById always scope to the caller, ADMIN included', async () => {
       repo.findById.mockResolvedValue({ id: ID });
       repo.markAsRead.mockResolvedValue({ id: ID });
       repo.delete.mockResolvedValue(true);
@@ -151,7 +151,11 @@ describe('NotificationService', () => {
       expect(repo.markAsRead).toHaveBeenLastCalledWith(ID, ID);
       expect(repo.delete).toHaveBeenLastCalledWith(ID, ID);
       await service.findById(ID, ADMIN);
-      expect(repo.findById).toHaveBeenLastCalledWith(ID, undefined);
+      expect(repo.findById).toHaveBeenLastCalledWith(ID, ADMIN.userId);
+      await service.markAsRead(ID, ADMIN);
+      expect(repo.markAsRead).toHaveBeenLastCalledWith(ID, ADMIN.userId);
+      await service.delete(ID, ADMIN);
+      expect(repo.delete).toHaveBeenLastCalledWith(ID, ADMIN.userId);
     });
 
     it('undefined role is not creatable (403)', async () => {

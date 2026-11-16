@@ -21,12 +21,12 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 FROM node:22-alpine
 WORKDIR /app
 ENV NODE_ENV=production \
-    PORT=4001 \
+    PORT=4002 \
     THIRD_QUEUE=third_queue
 
 COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/dist ./dist
 COPY package.json tsconfig.json ./
 USER node
-EXPOSE 4001
+EXPOSE 4002
 CMD ["node", "dist/main"]

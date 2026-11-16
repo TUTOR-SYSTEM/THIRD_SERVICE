@@ -21,9 +21,6 @@ const CREATABLE_TYPES_BY_ROLE: Record<string, readonly string[]> = {
 };
 
 /** ADMIN is not restricted to the caller's own rows. */
-const scopeUserId = (actor: NotificationActor) =>
-  actor.role === 'ADMIN' ? undefined : actor.userId;
-
 @Injectable()
 export class NotificationService {
   private readonly logger = new Logger(NotificationService.name);
@@ -112,14 +109,16 @@ export class NotificationService {
 
   async findById(id: string, actor: NotificationActor) {
     this.assertUuid(id);
-    const note = await this.repo.findById(id, scopeUserId(actor));
+    // Detail is recipient-only (even for ADMIN): other users' notifications are 404.
+    const note = await this.repo.findById(id, actor.userId);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
 
   async markAsRead(id: string, actor: NotificationActor) {
     this.assertUuid(id);
-    const note = await this.repo.markAsRead(id, scopeUserId(actor));
+    // Recipient-only (even for ADMIN): only the recipient manages read/delete state.
+    const note = await this.repo.markAsRead(id, actor.userId);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return note;
   }
@@ -130,7 +129,8 @@ export class NotificationService {
 
   async delete(id: string, actor: NotificationActor) {
     this.assertUuid(id);
-    const deleted = await this.repo.delete(id, scopeUserId(actor));
+    // Recipient-only (even for ADMIN): only the recipient deletes their notification.
+    const deleted = await this.repo.delete(id, actor.userId);
     if (!deleted) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
     return { id };
   }

@@ -40,15 +40,12 @@ describe('uploads review fixes (group B)', () => {
   afterEach(() => jest.restoreAllMocks());
 
   describe('HTTP controller metadata', () => {
-    it.each(['upload', 'uploadMultiple', 'download', 'delete'] as const)(
-      '%s is not @Public',
-      (h) => {
-        const r = new Reflector();
-        expect(
-          r.getAllAndOverride(IS_PUBLIC_KEY, [UploadController.prototype[h], UploadController]),
-        ).toBeFalsy();
-      },
-    );
+    it.each(['upload', 'uploadMultiple', 'download', 'delete'] as const)('%s requires a JWT (not @Public)', (h) => {
+      const r = new Reflector();
+      expect(
+        r.getAllAndOverride(IS_PUBLIC_KEY, [UploadController.prototype[h], UploadController]),
+      ).toBeFalsy();
+    });
 
     it('multer limits 10MB / 5 files (contract C5)', () => {
       const imports = Reflect.getMetadata('imports', UploadModule) as any[];

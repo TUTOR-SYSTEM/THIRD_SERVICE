@@ -81,8 +81,10 @@ async function bootstrap() {
 
   if (process.env.NODE_ENV !== 'production') {
     const config = new DocumentBuilder()
-      .setTitle('Backends API')
-      .setDescription('API documentation for the Backends financial management system')
+      .setTitle('Third Service API')
+      .setDescription(
+        'API documentation for third-service (email, notifications, uploads, logs, redis)',
+      )
       .setVersion('1.0')
       .addBearerAuth(
         {
@@ -93,27 +95,11 @@ async function bootstrap() {
         },
         'access-token',
       )
-      // ── Tutor Management ─────────────────────────────
-      .addTag('Users')
-      .addTag('Auth')
-      .addTag('Students')
-      .addTag('Curriculum')
-      .addTag('Chapter')
-      .addTag('Lesson')
-      .addTag('Classes')
-      .addTag('Schedules')
-      .addTag('Sessions')
-      .addTag('Exercises')
-      .addTag('Tuitions')
+      // ── Infra / utility features (the only tags this repo's controllers use) ──
+      .addTag('Email')
       .addTag('Notifications')
-      // ── Finance Management ────────────────────────────
-      .addTag('Categories')
-      .addTag('Wallets')
-      .addTag('Transactions')
-      .addTag('Reports')
-      // ── System ────────────────────────────────────────
       .addTag('Upload')
-      .addTag('Cloudinary')
+      .addTag('Logs')
       .addTag('Health')
       .addTag('Redis')
       .build();

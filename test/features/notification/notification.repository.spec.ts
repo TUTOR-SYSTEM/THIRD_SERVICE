@@ -125,8 +125,8 @@ describe('NotificationRepository', () => {
     it('returns the row or null', async () => {
       db.select.mockReturnValueOnce(chain([{ id: 'x' }])).mockReturnValueOnce(chain([]));
 
-      await expect(repo.findById('x')).resolves.toEqual({ id: 'x' });
-      await expect(repo.findById('y')).resolves.toBeNull();
+      await expect(repo.findById('x', 'u')).resolves.toEqual({ id: 'x' });
+      await expect(repo.findById('y', 'u')).resolves.toBeNull();
     });
   });
 
@@ -135,12 +135,12 @@ describe('NotificationRepository', () => {
       const c = chain([{ id: 'x', isRead: true }]);
       db.update.mockReturnValueOnce({ set: c.set });
       c.set.mockReturnValue(c);
-      await expect(repo.markAsRead('x')).resolves.toEqual({ id: 'x', isRead: true });
+      await expect(repo.markAsRead('x', 'u')).resolves.toEqual({ id: 'x', isRead: true });
 
       const empty = chain([]);
       db.update.mockReturnValueOnce({ set: empty.set });
       empty.set.mockReturnValue(empty);
-      await expect(repo.markAsRead('none')).resolves.toBeNull();
+      await expect(repo.markAsRead('none', 'u')).resolves.toBeNull();
     });
 
     it('markAllAsRead resolves with { markedAll, count } (matches API_ENDPOINTS.md)', async () => {
@@ -154,8 +154,8 @@ describe('NotificationRepository', () => {
     it('delete reports true only when a row came back', async () => {
       db.delete.mockReturnValueOnce(chain([{ id: 'x' }])).mockReturnValueOnce(chain([]));
 
-      await expect(repo.delete('x')).resolves.toBe(true);
-      await expect(repo.delete('x')).resolves.toBe(false);
+      await expect(repo.delete('x', 'u')).resolves.toBe(true);
+      await expect(repo.delete('x', 'u')).resolves.toBe(false);
     });
   });
 });

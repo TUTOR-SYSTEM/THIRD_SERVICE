@@ -80,7 +80,7 @@ Only `@packages/*` is aliased. Do not create new aliases.
 - `.env` is gitignored. Copy from `.env.example` and set `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (UUID v4).
 - `DATABASE_URL` is used if set; otherwise built from `POSTGRES_*` vars.
 - JWT falls back: `JWT_ACCESS_SECRET` → `JWT_SECRET` → hardcoded dev secret.
-- Email is optional in dev: forgot-password returns 200 with reset link logged to server console.
+- Email is optional in dev: forgot-password returns 200; the 6-digit reset code is emailed by third-service (SMTP must be configured).
 
 ## Docker
 

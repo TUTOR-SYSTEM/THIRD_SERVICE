@@ -6,9 +6,11 @@ or different in third-service.
 
 - **Auth**: routes are guarded globally by `JwtAuthGuard`, `LanguageGuard`, and
   `TokenBucketGuard` (all three registered as `APP_GUARD` in `app.module.ts`, in that order).
-  `@Public()` for intentionally open endpoints — none of the `uploads` routes or the `email`
-  test route are `@Public()` any more (gateway reaches this service over RMQ, and the UI only
-  calls gateway's `/upload`). **No fallback JWT secret**: always read it through
+  HTTP controllers `app`, `email`, `log`, `redis` are class-level `@Public()` — no access token is required on their HTTP routes, and the `ADMIN` role gates
+  (`@Roles`/`RolesGuard`) were removed from them. RPC (`*.rpc.controller.ts`) is not HTTP, so the
+  global guards never run on it and it is unaffected. Do not add `@Public()` to RPC handlers.
+  `notification` and `upload` are the exceptions: they stay guarded by the global `JwtAuthGuard` (no `@Public()`; `upload` reads `@CurrentUser().role`/`id`, so it must have a token),
+  because its handlers scope data by `@CurrentUser().id` and must not run without a user. **No fallback JWT secret**: always read it through
   `resolveJwtAccessSecret(configService)` (`@packages/configs/jwt-sign.config`), which throws when
   `JWT_ACCESS_SECRET`/`JWT_SECRET` is unset — never reintroduce a hard-coded default. There is no `admin`/`student`/`auth` feature in this repo — `@Roles`/
   `RolesGuard` exist in `@packages/guards` (shared package copy) but nothing here currently uses
@@ -23,12 +25,11 @@ or different in third-service.
 - **List response shape**: `{ data, pagination }` (see `NotificationRepository.findAll`) — the
   list key is `data`, not the resource name. This differs from `tutor-service`/`user`'s
   convention; match this repo's existing shape for consistency within it.
-- **Swagger tags in `main.ts` are stale** — the `DocumentBuilder` tag list still includes
-  `Users`/`Auth`/`Students`/`Curriculum`/`Classes`/`Categories`/`Wallets`/`Transactions`/etc.
-  from when this file was copied from another service's `main.ts`. The only tags actually used
-  by a `@ApiTags(...)` decorator in this repo are `Notifications`, `Upload`, `Health`, `Redis`
-  (and `Emails`, implicitly, if added). Trim stale tags when you're already touching `main.ts`
-  for something else — not worth a standalone task on its own.
+- **Swagger tags in `main.ts` must match `@ApiTags(...)` usage.** The `DocumentBuilder` tag list
+  is trimmed to exactly the tags this repo's controllers use: `Email`, `Notifications`, `Upload`, `Logs`,
+  `Health`, `Redis`. When you add or rename an `@ApiTags(...)`, add the matching `.addTag(...)`
+  in `main.ts`; when you remove one, remove its tag too. The title is `Third Service API`.
+  Only non-production builds expose Swagger (`NODE_ENV !== 'production'`).
 - **Request-log redaction**: `TraceContextInterceptor` never stores the body/response of `log.*`,
   `redis.*` or `email.*` RPCs (they carry sessions and reset tokens) and redacts
   `token`/`value`/`resetToken`/`secret`/`authorization` etc. elsewhere — add new secret-bearing

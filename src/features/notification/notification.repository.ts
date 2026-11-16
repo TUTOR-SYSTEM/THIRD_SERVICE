@@ -130,26 +130,25 @@ export class NotificationRepository {
     };
   }
 
-  /** `userId` set => rows the user received, plus unaddressed rows they sent; omitted (ADMIN) => unrestricted. */
-  async findById(id: string, userId?: string) {
-    const where = userId
-      ? and(eq(notifications.id, id), this.visibleTo(userId))
-      : eq(notifications.id, id);
-    const [note] = await this.db.select().from(notifications).where(where);
+  /** Recipient-only: returns the row only when `userId` is its recipient (`user_id`); otherwise null. */
+  async findById(id: string, userId: string) {
+    const [note] = await this.db
+      .select()
+      .from(notifications)
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
     return note ?? null;
   }
 
   /**
-   * `userId` set => recipient-only; omitted (ADMIN) => unrestricted.
-   * Intentional: a sender can see a notification they sent but cannot mark it read or delete it,
-   * since only the recipient manages its read/delete state.
+   * Recipient-only (`user_id = userId`), ADMIN included. Intentional: a sender can see a notification
+   * they sent but cannot mark it read or delete it, since only the recipient manages its state.
    */
-  async markAsRead(id: string, userId?: string) {
+  async markAsRead(id: string, userId: string) {
     const [note] = await this.db
       .update(notifications)
       // coalesce: re-reading an already-read notification keeps the first read time.
       .set({ isRead: true, readAt: sql`coalesce(${notifications.readAt}, now())` })
-      .where(this.ownedBy(id, userId))
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
       .returning();
     return note ?? null;
   }
@@ -169,11 +168,14 @@ export class NotificationRepository {
   }
 
   /**
-   * `userId` set => recipient-only; omitted (ADMIN) => unrestricted.
-   * Intentional: the sender cannot delete a notification addressed to someone else (see markAsRead).
+   * Recipient-only (`user_id = userId`), ADMIN included: the sender cannot delete a notification
+   * addressed to someone else (see markAsRead).
    */
-  async delete(id: string, userId?: string) {
-    const [note] = await this.db.delete(notifications).where(this.ownedBy(id, userId)).returning();
+  async delete(id: string, userId: string) {
+    const [note] = await this.db
+      .delete(notifications)
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)))
+      .returning();
     return !!note;
   }
 
@@ -187,11 +189,5 @@ export class NotificationRepository {
       eq(notifications.userId, userId),
       and(eq(notifications.senderId, userId), isNull(notifications.userId)),
     )!;
-  }
-
-  private ownedBy(id: string, userId?: string) {
-    return userId
-      ? and(eq(notifications.id, id), eq(notifications.userId, userId))
-      : eq(notifications.id, id);
   }
 }

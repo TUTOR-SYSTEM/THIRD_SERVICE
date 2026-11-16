@@ -1,25 +1,44 @@
 import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Resend } from 'resend';
+import * as nodemailer from 'nodemailer';
+import type { Transporter } from 'nodemailer';
 import { SendMailOptions } from '@packages/interfaces';
+import { renderPasswordResetOtpEmail } from './templates/password-reset-otp.template';
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
-  private readonly resend: Resend;
+  private readonly transporter: Transporter;
   private readonly from: string;
   private readonly resetPasswordUrlBase: string;
 
   constructor(private readonly configService: ConfigService) {
-    const apiKey = this.configService.getOrThrow<string>('RESEND_API_KEY');
+    const host = this.configService.getOrThrow<string>('SMTP_HOST');
     this.from = this.configService.getOrThrow<string>('MAIL_FROM');
     this.resetPasswordUrlBase = this.configService.get<string>(
       'PASSWORD_RESET_URL_BASE',
       'http://localhost:3000',
     );
-    this.resend = new Resend(apiKey);
+
+    const port = Number(this.configService.get<string>('SMTP_PORT', '587'));
+    if (!Number.isInteger(port) || port <= 0) {
+      throw new Error('SMTP_PORT must be a positive integer');
+    }
+    const secure = this.configService.get<string>('SMTP_SECURE', port === 465 ? 'true' : 'false');
+    const user = this.configService.get<string>('SMTP_USER');
+    const pass = this.configService.get<string>('SMTP_PASS');
+    if (!!user !== !!pass) {
+      throw new Error('SMTP_USER and SMTP_PASS must be set together');
+    }
+
+    this.transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: secure === 'true',
+      auth: user && pass ? { user, pass } : undefined,
+    });
   }
 
   async testSendEmailService() {
@@ -39,14 +58,18 @@ export class EmailService {
     });
   }
 
-  async sendForgotPasswordMail(params: { to: string; resetToken: string; displayName: string }) {
-    const resetUrl = `${this.resetPasswordUrlBase}/reset-password?token=${encodeURIComponent(params.resetToken)}`;
+  /** Sends the 6-digit password-reset code. The code is never logged (see `sendMail`). */
+  async sendPasswordResetOtpMail(params: { to: string; otp: string; displayName: string }) {
+    const { html, text } = renderPasswordResetOtpEmail({
+      otp: params.otp,
+      displayName: params.displayName,
+    });
 
     return this.sendMail({
       to: params.to,
-      subject: 'Reset your password',
-      html: `<p>Hi ${escapeHtml(params.displayName)},</p><p>We received a request to reset your password. Click the link below to choose a new one:</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>This link expires in 5 minutes. If you didn't request this, you can ignore this email.</p>`,
-      text: `Hi ${params.displayName}, reset your password here: ${resetUrl} (expires in 5 minutes)`,
+      subject: `${params.otp} là mã đặt lại mật khẩu của bạn`,
+      html,
+      text,
     });
   }
 
@@ -64,18 +87,15 @@ export class EmailService {
 
   private async sendMail(options: SendMailOptions) {
     try {
-      const { data, error } = await this.resend.emails.send({
+      // @types/nodemailer types sendMail's result as `any`; narrow it to the field we use.
+      const info = (await this.transporter.sendMail({
         from: this.from,
         ...options,
-      });
+      })) as { messageId: string };
 
-      if (error) {
-        throw new Error(error.message);
-      }
+      this.logger.log(`Mail sent: ${info.messageId}`);
 
-      this.logger.log(`Mail sent: ${JSON.stringify(data)}`);
-
-      return data;
+      return { id: info.messageId };
     } catch (error) {
       this.logger.error('Failed to send mail', error);
 

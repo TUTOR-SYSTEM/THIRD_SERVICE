@@ -18,6 +18,11 @@ export interface UploadResponse {
 export interface UploadActor {
   userId: string;
   role: string;
+  /**
+   * Gateway đã kiểm tra quyền truy cập file theo ngữ cảnh (buổi học / bài tập / bài giảng) qua
+   * `exercise.fileAccess`; khi true thì bỏ qua kiểm tra owner-metadata ở đây.
+   */
+  authorized?: boolean;
 }
 
 export interface PresignedDownload {
