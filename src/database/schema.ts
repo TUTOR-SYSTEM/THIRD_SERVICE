@@ -135,6 +135,7 @@ export const classes = pgTable('classes', {
   startTime: timestamp('start_time').defaultNow().notNull(),
   endTime: timestamp('end_time').defaultNow().notNull(),
   location: text('location'),
+  maxStudents: integer('max_students').notNull().default(10),
   curriculumId: uuid('curriculum_id').references(() => curriculums.id, { onDelete: 'set null' }),
   tutorId: uuid('tutor_id')
     .notNull()
@@ -238,7 +239,7 @@ export const curriculums = pgTable('curriculums', {
     .references(() => users.id, { onDelete: 'cascade' }),
   gradesId: uuid('grade_id').references(() => grades.id, { onDelete: 'cascade' }),
   subject: varchar('title', { length: 255 }).notNull(),
-  code: varchar('code', { length: 6 }).notNull(),
+  code: varchar('code', { length: 10 }).notNull(),
   grade: varchar('grade', { length: 2 }).notNull(),
   courseTime: varchar('courseTime').notNull(),
   description: text('description'),
@@ -357,6 +358,9 @@ export const exercise = pgTable('exercises', {
     .references(() => users.id, { onDelete: 'cascade' }),
   issueUrls: jsonb('issue_urls').$type<{ name: string; url: string; key: string }[]>().default([]),
   exerciseUrls: jsonb('exercise_urls')
+    .$type<{ name: string; url: string; key: string }[]>()
+    .default([]),
+  answerKeyUrls: jsonb('answer_key_urls')
     .$type<{ name: string; url: string; key: string }[]>()
     .default([]),
   status: exerciseStatusEnum('status').default('SUBMITTED').notNull(),
