@@ -61,11 +61,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       const host = this.configService.get<string>('REDIS_HOST')?.trim() || 'localhost';
       const port = Number(this.configService.get<string>('REDIS_PORT')?.trim() || '6379');
       const password = this.configService.get<string>('REDIS_PASSWORD')?.trim();
-      this.endpointLabel = `${host}:${Number.isFinite(port) ? port : 6380}`;
+      this.endpointLabel = `${host}:${Number.isFinite(port) ? port : 6379}`;
       const opts: RedisOptions = {
         ...connectionOptions,
         host,
-        port: Number.isFinite(port) ? port : 6380,
+        port: Number.isFinite(port) ? port : 6379,
         password: password && password.length > 0 ? password : undefined,
       };
       this.client = new Redis(opts);

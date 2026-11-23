@@ -136,13 +136,11 @@ describe('JwtAuthGuard', () => {
     });
   });
 
-  it('falls back to STUDENT for an unknown role claim', async () => {
+  it('rejects an unknown role claim instead of downgrading it to STUDENT', async () => {
     jwt.verify.mockReturnValue({ ...validPayload, role: 'SUPERUSER' });
-    const { ctx, request } = contextWith({ authorization: 'Bearer t' });
+    const { ctx } = contextWith({ authorization: 'Bearer t' });
 
-    await guard.canActivate(ctx);
-
-    expect(request.user).toEqual(expect.objectContaining({ role: 'STUDENT' }));
+    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 
   it('rejects when the role claim is not a string', async () => {

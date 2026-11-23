@@ -64,3 +64,6 @@ docker.env
 .env*
 !.env.example
 !.env.compose.example
+
+# Jev router skill dependencies
+.claude/skills/*/node_modules/

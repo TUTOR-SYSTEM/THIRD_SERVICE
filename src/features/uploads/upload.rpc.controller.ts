@@ -104,6 +104,13 @@ export class UploadRpcController {
 
   private reconstruct(file: UploadRpcFile): MulterFile {
     if (!file?.buffer) throw new BadRequestException('file is required');
+    // base64 is ~4/3 of the decoded size: refuse oversized payloads before decoding them.
+    if (
+      typeof file.buffer === 'string' &&
+      file.buffer.length > Math.ceil((MAX_UPLOAD_BYTES * 4) / 3) + 4
+    ) {
+      throw new BadRequestException(`File exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024}MB limit`);
+    }
     const buffer =
       typeof file.buffer === 'string'
         ? Buffer.from(file.buffer, 'base64')

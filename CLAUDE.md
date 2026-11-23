@@ -150,7 +150,7 @@ src/
 │   │                              # A variable that can't be filled = failed run, nothing sent.
 │   └── log/                      # Owns `request_logs` (centralized cross-service request logging —
 │                                  # see gateway's `LogController` for the admin-facing read API).
-│                                  # log.controller.ts (HTTP, @Public) + log.rpc.controller.ts
+│                                  # log.controller.ts (HTTP, ADMIN only) + log.rpc.controller.ts
 │                                  # (`log.create`/`log.query`/`log.trace`, reached by every
 │                                  # service's LoggerInterceptor/TraceContextInterceptor via
 │                                  # `@packages/context/log-sink`) → log.service.ts →
@@ -233,6 +233,7 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `SMTP_USER` / `SMTP_PASS`                 | Optional SMTP auth, but must be set together |
 | `MAIL_FROM`                               | Required — sender address for outgoing mail |
 | `PASSWORD_RESET_URL_BASE`                 | Base URL used in the verify-email link (the reset flow sends a code, no link) (default `http://localhost:3000`) |
+| `NOTIFICATION_REDIRECT_HOSTS`              | Comma-separated hosts allowed for absolute `https://` `redirectUrl` in notifications (internal `/path` always allowed); empty = only internal paths |
 | `CLOUDFLARE_R2_ENDPOINT` / `CLOUDFLARE_R2_ACCESS_KEY_ID` / `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | Required — `UploadService` throws "R2 not configured" without them |
 | `CLOUDFLARE_R2_REGION`                    | Default `auto`                              |
 | `CLOUDFLARE_R2_BUCKET`                    | Default `tutor`                             |

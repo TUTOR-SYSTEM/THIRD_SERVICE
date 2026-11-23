@@ -1,8 +1,7 @@
-import { BadRequestException, Controller } from '@nestjs/common';
+import { BadRequestException, Controller, Logger } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { z } from 'zod';
-import type { CreateRequestLogDto } from '@packages/entities/log';
-import { getRequestLogsQuerySchema } from '@packages/entities/log';
+import { createRequestLogSchema, getRequestLogsQuerySchema } from '@packages/entities/log';
 import { LogService } from './log.service';
 
 const traceSchema = z.object({
@@ -19,11 +18,18 @@ const traceSchema = z.object({
  */
 @Controller()
 export class LogRpcController {
+  private readonly logger = new Logger(LogRpcController.name);
   constructor(private readonly logService: LogService) {}
 
   @EventPattern('log.create')
-  create(@Payload() dto: CreateRequestLogDto) {
-    return this.logService.createInternal(dto);
+  create(@Payload() payload: unknown) {
+    // Validated here: this is an EventPattern, so an invalid row is dropped with a warning.
+    const parsed = createRequestLogSchema.safeParse(payload);
+    if (!parsed.success) {
+      this.logger.warn('log.create dropped: invalid payload');
+      return;
+    }
+    return this.logService.createInternal(parsed.data);
   }
 
   @MessagePattern('log.query')

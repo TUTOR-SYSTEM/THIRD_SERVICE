@@ -4,6 +4,8 @@ import { EmailRpcController } from 'src/features/email/email.rpc.controller';
 import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
 import { ROLES_KEY } from '@packages/decorators/roles.decorator';
 import { Reflector } from '@nestjs/core';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { AdminRoleGuard } from '@packages/guards';
 
 describe('EmailController / EmailRpcController', () => {
   const emailService = {
@@ -13,9 +15,10 @@ describe('EmailController / EmailRpcController', () => {
 
   beforeEach(() => jest.clearAllMocks());
 
-  it('is @Public (no access token required)', () => {
+  it('is ADMIN only: not @Public and guarded by AdminRoleGuard', () => {
     const reflector = new Reflector();
-    expect(reflector.get<boolean>(IS_PUBLIC_KEY, EmailController)).toBe(true);
+    expect(reflector.get<boolean>(IS_PUBLIC_KEY, EmailController)).toBeUndefined();
+    expect(Reflect.getMetadata(GUARDS_METADATA, EmailController)).toContain(AdminRoleGuard);
   });
 
   it('HTTP GET /emails delegates to testSendEmailService and returns its result', async () => {

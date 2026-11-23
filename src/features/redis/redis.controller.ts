@@ -8,6 +8,7 @@ import {
   HttpCode,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,7 +18,7 @@ import {
   ApiResponse as SwaggerResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import { Public } from '@packages/decorators';
+import { AdminRoleGuard } from '@packages/guards';
 import { ZodValidationPipe } from '@packages/pipes';
 import { z } from 'zod';
 import { DELETABLE_PREFIX_PATTERN, RedisService } from './redis.service';
@@ -74,14 +75,14 @@ type DelByPrefixDto = z.infer<typeof delByPrefixSchema>;
 type IncrDto = z.infer<typeof incrSchema>;
 
 /**
- * HTTP mirror of `RedisRpcController` (same `<feature>/<rpcMethod>` route names). Every route
+ * ADMIN only (JWT + role). HTTP mirror of `RedisRpcController` (same `<feature>/<rpcMethod>` route names). Every route
  * delegates to the unmodified `RedisService`. Any key (or prefix) in a sensitive family is refused
  * with 403 on every route, so sessions, refresh tokens and reset tokens cannot be read, written,
  * consumed or bulk-deleted over HTTP.
  */
 @ApiTags('Redis')
 @ApiBearerAuth('access-token')
-@Public()
+@UseGuards(AdminRoleGuard)
 @Controller('redis')
 export class RedisController {
   constructor(private readonly redisService: RedisService) {}

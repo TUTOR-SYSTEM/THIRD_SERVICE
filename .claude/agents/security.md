@@ -36,15 +36,7 @@ Review the diff: `git diff`, `git diff --staged`, `git diff main...HEAD`. Priori
 services, the `uploads` file-handling path, and RabbitMQ RPC responders.
 
 ## What to check
-- **AuthZ**: by design, HTTP controllers except `notification` are class-level `@Public()` now (no access token, ADMIN
-  gates removed, per user request). Report this as a known, accepted exposure of notification CRUD (upload routes are JWT-guarded),
-  HTTP `/redis/*` (get/exists/ttl/set/getdel/incr/del/delByPrefix, registered in `RedisModule`; every route 403s on session/login-session/reset-password/refresh/refresh-token keys), `log.*` and `email.test` — but still flag any NEW HTTP route added
-  without thought, and any `@Public()` added to an `*.rpc.controller.ts` handler (RPC must stay
-  unreachable from HTTP). `notification` id routes are scoped to the caller: `getById` is
-  recipient-only (`user_id = caller`, ADMIN included); `markAsRead`/`markAllAsRead`/`delete` are
-  recipient-only too (ADMIN included); `getAll` lists received rows plus unaddressed rows the caller sent — verify a new
-  endpoint keeps that scoping. Flag any reintroduced fallback
-  JWT secret (secrets must come from `resolveJwtAccessSecret`).
+- **AuthZ**: `app` health is `@Public()`. `email`, `log` and `redis` HTTP controllers are JWT + `AdminRoleGuard` (ADMIN only; the 2026-11-23 review reversed the earlier no-token exposure, per the review request). `notification` and `upload` are JWT-guarded; upload `delete` is ADMIN-or-uploader (`deleteOwned`), and `download` checks owner/ADMIN/`authorized`. Flag any NEW HTTP route added without a guard, and any `@Public()` added to an `*.rpc.controller.ts` handler (RPC must stay unreachable from HTTP). `notification` id routes are scoped to the caller: `getById`, `markAsRead`, `markAllAsRead` and `delete` are recipient-only (ADMIN included); `getAll` lists received rows plus unaddressed rows the caller sent. Known gap: the RPC `notification.*`, `upload.download` and `log.*` handlers trust `role`/`userId`/`authorized` from the payload (no signed actor yet), so any RabbitMQ publisher can act as any user.
 - **File upload safety** (`uploads`): file type/size not validated before upload only relying on
   client-supplied `mimetype`; `sharp` processing of attacker-controlled image bytes (resource
   exhaustion); R2 object keys built from user input without the existing UUID-based naming
@@ -65,8 +57,9 @@ services, the `uploads` file-handling path, and RabbitMQ RPC responders.
   rather than forwarding a client-supplied value. `@UseFilters(RpcExceptionFilter)` only shapes
   error responses — it does not validate input.
 - **Data exposure**: `notification` responses don't leak `senderId`/`userId` across unrelated
-  users; upload `download`/`delete` need a JWT over HTTP, but the RPC `upload.download|delete`
-  patterns still accept any key — confirm any new caller can't be tricked into fetching/deleting
+  users; upload `download`/`delete` need a JWT over HTTP; `delete` is ADMIN-or-uploader (`deleteOwned`, the
+  gateway `authorized` flag never grants delete), `download` is owner/ADMIN/`authorized`. The RPC `upload.download`
+  pattern still accepts any key and `notification.*` RPC trusts `role`/`userId` from the payload (no signed actor yet) — confirm any new caller can't be tricked into fetching/deleting
   an arbitrary key it shouldn't have access to.
 
 ## Output

@@ -44,6 +44,7 @@ describe('UploadController (HTTP)', () => {
     assertDownloadable: jest.fn().mockResolvedValue({ contentType: 'x', filename: 'x' }),
     download: jest.fn(),
     delete: jest.fn(),
+    deleteOwned: jest.fn().mockResolvedValue(undefined),
   };
   const controller = new UploadController(service as unknown as UploadService);
 
@@ -167,11 +168,14 @@ describe('UploadController (HTTP)', () => {
     );
   });
 
-  it('delete forwards the path param to the service', async () => {
-    service.delete.mockResolvedValue(undefined);
+  it('delete passes the path key and the caller identity to the ownership-checked service call', async () => {
+    service.deleteOwned.mockClear();
 
-    await controller.delete('uploads%2Fx.jpg');
+    await controller.delete({ id: 'user-1', role: 'TUTOR' } as never, 'uploads%2Fx.jpg');
 
-    expect(service.delete).toHaveBeenCalledWith('uploads%2Fx.jpg');
+    expect(service.deleteOwned).toHaveBeenCalledWith('uploads%2Fx.jpg', {
+      userId: 'user-1',
+      role: 'TUTOR',
+    });
   });
 });

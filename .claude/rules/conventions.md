@@ -6,10 +6,11 @@ or different in third-service.
 
 - **Auth**: routes are guarded globally by `JwtAuthGuard`, `LanguageGuard`, and
   `TokenBucketGuard` (all three registered as `APP_GUARD` in `app.module.ts`, in that order).
-  HTTP controllers `app`, `email`, `log`, `redis` are class-level `@Public()` — no access token is required on their HTTP routes, and the `ADMIN` role gates
-  (`@Roles`/`RolesGuard`) were removed from them. RPC (`*.rpc.controller.ts`) is not HTTP, so the
-  global guards never run on it and it is unaffected. Do not add `@Public()` to RPC handlers.
-  `notification` and `upload` are the exceptions: they stay guarded by the global `JwtAuthGuard` (no `@Public()`; `upload` reads `@CurrentUser().role`/`id`, so it must have a token),
+  HTTP controllers: `app` is class-level `@Public()` (health only). `email`, `log` and `redis` are
+  JWT-guarded and ADMIN only via `@UseGuards(AdminRoleGuard)` (from `@packages/guards`); the review
+  of 2026-11-23 replaced the earlier no-token exposure. RPC (`*.rpc.controller.ts`) is not HTTP, so
+  the global guards never run on it and it is unaffected. Do not add `@Public()` to RPC handlers.
+  `notification` and `upload` stay guarded by the global `JwtAuthGuard` (no `@Public()`; `upload` reads `@CurrentUser().role`/`id`, so it must have a token),
   because its handlers scope data by `@CurrentUser().id` and must not run without a user. **No fallback JWT secret**: always read it through
   `resolveJwtAccessSecret(configService)` (`@packages/configs/jwt-sign.config`), which throws when
   `JWT_ACCESS_SECRET`/`JWT_SECRET` is unset — never reintroduce a hard-coded default. There is no `admin`/`student`/`auth` feature in this repo — `@Roles`/

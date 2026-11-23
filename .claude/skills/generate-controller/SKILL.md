@@ -66,7 +66,7 @@ Every new `@ApiTags('X')` must also get a matching `.addTag('X')` in the `Docume
 ## Rules
 - Controllers hold no business logic — delegate everything to the service.
 - Import `ZodValidationPipe` from `@packages/pipes`, DTOs/schemas from `@packages/entities/foo`.
-- HTTP controllers in this repo are class-level `@Public()` (no access token, no ADMIN gate) — except
-  `notification`, which stays JWT-guarded because it scopes by `user.id`. Match
-  `email.controller.ts`/`upload.controller.ts`. Global `LanguageGuard`/`TokenBucketGuard` still apply.
+- HTTP controllers: `app` is `@Public()` (health only). `email`, `log`, `redis` use
+  `@UseGuards(AdminRoleGuard)` (ADMIN only). `notification` and `upload` are JWT-guarded (no `@Public()`)
+  and scope by `user.id`. Global `LanguageGuard`/`TokenBucketGuard` still apply.
   Never add `@Public()` to `*.rpc.controller.ts`.

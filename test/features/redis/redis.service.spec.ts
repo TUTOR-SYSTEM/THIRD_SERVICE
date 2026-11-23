@@ -84,20 +84,20 @@ describe('RedisService', () => {
       });
     });
 
-    it('defaults to localhost:6380 with no password when nothing is configured', () => {
+    it('defaults to localhost:6379 with no password when nothing is configured', () => {
       new RedisService(makeConfig({}));
 
       expect(lastClient().args[0]).toMatchObject({
         host: 'localhost',
-        port: 6380,
+        port: 6379,
         password: undefined,
       });
     });
 
-    it('falls back to port 6380 when REDIS_PORT is not numeric', () => {
+    it('falls back to port 6379 when REDIS_PORT is not numeric', () => {
       new RedisService(makeConfig({ REDIS_PORT: 'abc' }));
 
-      expect(lastClient().args[0]).toMatchObject({ port: 6380 });
+      expect(lastClient().args[0]).toMatchObject({ port: 6379 });
     });
 
     it('logs a warning with the endpoint on connection errors and logs on connect/ready', () => {

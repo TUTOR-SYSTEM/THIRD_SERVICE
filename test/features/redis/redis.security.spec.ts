@@ -3,7 +3,7 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { PATTERN_METADATA } from '@nestjs/microservices/constants';
 import { IS_PUBLIC_KEY } from '@packages/decorators/public.decorator';
 import { ROLES_KEY } from '@packages/decorators/roles.decorator';
-import { RolesGuard } from '@packages/guards';
+import { AdminRoleGuard, RolesGuard } from '@packages/guards';
 import { RedisController } from 'src/features/redis/redis.controller';
 import { RedisRpcController } from 'src/features/redis/redis.rpc.controller';
 import { RedisService } from 'src/features/redis/redis.service';
@@ -24,8 +24,9 @@ describe('F-01 RedisController HTTP hardening', () => {
   const controller = new RedisController(redis as unknown as RedisService);
   beforeEach(() => jest.clearAllMocks());
 
-  it('is  and has no ADMIN role gate', () => {
-    expect(Reflect.getMetadata(IS_PUBLIC_KEY, RedisController)).toBe(true);
+  it('is ADMIN only: not @Public and guarded by AdminRoleGuard', () => {
+    expect(Reflect.getMetadata(IS_PUBLIC_KEY, RedisController)).toBeUndefined();
+    expect(Reflect.getMetadata(GUARDS_METADATA, RedisController)).toContain(AdminRoleGuard);
     expect(Reflect.getMetadata(ROLES_KEY, RedisController)).toBeUndefined();
   });
 

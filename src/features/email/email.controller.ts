@@ -1,11 +1,12 @@
-import { Controller, Get } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { Controller, Get, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { EmailService } from './email.service';
-import { Public } from '@packages/decorators';
+import { AdminRoleGuard } from '@packages/guards';
 
-// Sends a real email on every call. Currently @Public() (no access token) per the user's request.
+// Sends a real email on every call, so it is ADMIN only (JWT required).
 @ApiTags('Email')
-@Public()
+@ApiBearerAuth('access-token')
+@UseGuards(AdminRoleGuard)
 @Controller('email')
 export class EmailController {
   constructor(private readonly email: EmailService) {}
