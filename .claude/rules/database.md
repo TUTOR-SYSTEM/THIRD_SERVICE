@@ -59,9 +59,9 @@ hand (commit "Sync local schema mirror with gateway develop"), not by importing 
 './schema'`. Because of `esModuleInterop`, that namespace gets an extra `default`
 key holding a null-prototype ESM namespace, and drizzle's `is()` crashes on it
 (`Cannot read properties of null (reading 'constructor')`, logged misleadingly as "PostgreSQL
-connect failed"). The module therefore strips `default` (`const { default: _default, ...tables }
-= schema`) and passes `{ schema: tables }` to `drizzle()`. Keep that when touching the provider
+connect failed"). The module therefore strips the `default` key (`Object.fromEntries(Object.entries(schema)
+.filter(([key]) => key !== 'default'))`) and passes `{ schema: tables }` to `drizzle()`. Keep that when touching the provider
 (same fix lives in `user` and `tutor-service`). `request_logs` also gained `ip` and
 `error_message` columns in gateway's schema — apply with `db:push` from gateway.
-`test_scenarios`/`test_runs`/`test_fixtures` (used by `src/features/test-scenario/`) live in the
-same mirror.
+`test_scenarios`/`test_runs`/`test_fixtures` still live in the mirror, but nothing in `src/` uses them:
+`src/features/test-scenario/` was removed (commit `fa1bbc1`).

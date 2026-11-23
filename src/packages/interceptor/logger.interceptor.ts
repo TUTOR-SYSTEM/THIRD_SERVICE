@@ -15,6 +15,8 @@ const SENSITIVE_KEYS = new Set(
     'otp',
     'jti',
     'secret',
+    'value',
+    'code',
     'authorization',
     'cookie',
   ].map((k) => k.toLowerCase()),

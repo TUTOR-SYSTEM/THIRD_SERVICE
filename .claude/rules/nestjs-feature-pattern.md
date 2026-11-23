@@ -10,7 +10,7 @@ child-of-parent feature, stop — that pattern belongs in `tutor-service`, not h
 `{name}.controller.ts` → `{name}.service.ts` → `{name}.repository.ts`, plus `{name}.module.ts`.
 Use this when the feature owns a Postgres table.
 
-- Controller: `@ApiTags`/`@ApiBearerAuth`, HTTP controllers `app`/`email`/`log`/`redis` are class-level `@Public()` (no access token; `notification` and `upload` stay JWT-guarded; see
+- Controller: `@ApiTags`/`@ApiBearerAuth`, HTTP controllers: `app` is `@Public()`; `email`, `log`, `redis` are `AdminRoleGuard` (ADMIN only); `notification` and `upload` stay JWT-guarded (see
   `conventions.md`). RPC handlers never pass through the HTTP guards. Validates body/query with
   `new ZodValidationPipe<Dto>(schema)`, reads `@CurrentUser() user: JwtGuardUser`.
 - Service: validates FK-shaped ids with `checkUuidValid` (see `createNotificationService`
@@ -42,7 +42,7 @@ Use this when the feature owns a Postgres table.
 `{name}.controller.ts` → `{name}.service.ts` + `{name}.module.ts`. No repository, no Zod
 entities under `src/packages/entities/` — the service wraps an external transport (Nodemailer SMTP) directly
 and its methods take plain TS object params, not Zod-validated DTOs. `EmailController` currently
-exposes only a test route (`@Public()`, no ADMIN gate); real send methods (`sendPasswordResetOtpMail`) are called
+exposes only a test route (ADMIN only via `AdminRoleGuard`); real send methods (`sendPasswordResetOtpMail`) are called
 from service code, not routed through HTTP.
 
 ## Shape 3 — provider/interface, no repository, no entities (`uploads`)
@@ -59,7 +59,7 @@ Same as every other service: `@Global()` module, no repository, exported so any 
 inject it directly.
 
 - `redis` — one `RedisService` owning the `ioredis` connection lifecycle
-  (`OnModuleDestroy`), plus `RedisController` (HTTP, registered in `RedisModule` so it shows in Swagger; routes mirror the RPC names: `GET /redis/get|exists|ttl`, `POST /redis/set|getdel|incr` (`getdel` replies 404 when the key is missing, RPC and HTTP alike), `DELETE /redis/del|delByPrefix`; every route returns 403 for sensitive key families) and
+  (`OnModuleDestroy`), plus `RedisController` (HTTP, ADMIN only via `AdminRoleGuard`, registered in `RedisModule` so it shows in Swagger; routes mirror the RPC names: `GET /redis/get|exists|ttl`, `POST /redis/set|getdel|incr` (`getdel` replies 404 when the key is missing, RPC and HTTP alike), `DELETE /redis/del|delByPrefix`; every route returns 403 for sensitive key families) and
   `RedisRpcController` (`@MessagePattern('redis.get'|'redis.set')` +
   `@EventPattern('redis.del')`) — both call the same unmodified `RedisService`.
 
@@ -83,10 +83,16 @@ exists, reachable once the caller's `RmqProducer` routes its prefix to `third_qu
 If a feature here ever needs to **call out** to another service, copy gateway's
 `src/features/rabbitmq/` module (`RmqModule`/`RmqProducer`) as `user` did.
 
-Upload limits: Multer (`UploadModule`) caps files at `MAX_UPLOAD_BYTES` (10MB, 10 files) and
+Upload limits: Multer (`UploadModule`) caps files at `MAX_UPLOAD_BYTES` (10MB, 5 files) and
 `UploadService.upload` re-checks size for the RPC path; a missing file or undecodable image is a 400,
 `uploadMultiple` deletes already-uploaded files if one fails, and `UploadController.download` streams
 with `stream.pipeline` (never bare `pipe`).
+
+Upload delete: `DELETE /upload/delete/:key` runs `UploadService.deleteOwned` (ADMIN or the uploader via
+owner metadata; the gateway `authorized` flag does not grant delete). Clients must URL-encode the key
+(`uploads%2Fx.jpg`); a raw `/` is a 404. Notifications: `NotificationService` adds `detailUrl` to
+responses (`notification.detail-url.ts`): the sender's `redirectUrl` if safe (internal path, or https host in
+`NOTIFICATION_REDIRECT_HOSTS`), else a per-type page.
 
 Upload gotcha: `UploadService.upload` always re-encodes images to JPEG via Sharp, so the stored
 key ends in `.jpg` and the returned `mimetype` is `image/jpeg` (not the original); non-images keep

@@ -11,9 +11,10 @@ describe('resolveCorsOrigins (F-18)', () => {
   it('allowlist wins even in production', () => {
     expect(resolveCorsOrigins({ CORS_ORIGINS: 'https://a.com', NODE_ENV: 'production' } as any)).toEqual(['https://a.com']);
   });
-  it('is true outside production and false in production without an allowlist', () => {
-    expect(resolveCorsOrigins({} as any)).toBe(true);
+  it('is true only for development/test without an allowlist, false otherwise', () => {
+    expect(resolveCorsOrigins({} as any)).toBe(false);
     expect(resolveCorsOrigins({ NODE_ENV: 'development', CORS_ORIGINS: '  ' } as any)).toBe(true);
+    expect(resolveCorsOrigins({ NODE_ENV: 'test' } as any)).toBe(true);
     expect(resolveCorsOrigins({ NODE_ENV: 'production' } as any)).toBe(false);
   });
 });

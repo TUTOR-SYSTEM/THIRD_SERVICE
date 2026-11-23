@@ -59,7 +59,8 @@ function parseJwtUserRole(value: unknown): JwtUserRole {
   if (typeof value === 'string' && (JWT_ROLES as readonly string[]).includes(value)) {
     return value as JwtUserRole;
   }
-  return 'STUDENT';
+  // An unknown role claim is rejected, never silently downgraded.
+  throw new UnauthorizedException('Unauthorized ...');
 }
 
 function parseAccessPayload(decoded: unknown): JwtGuardUser {

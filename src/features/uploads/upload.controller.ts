@@ -134,9 +134,15 @@ export class UploadController {
 
   @Delete('delete/:key')
   @HttpCode(StatusCodes.OK)
-  @ApiOperation({ summary: 'Delete file' })
+  @ApiOperation({
+    summary: 'Delete file',
+    description:
+      'ADMIN or the uploader only. The key must be URL-encoded (a raw "/" gives 404): uploads%2Fx.jpg',
+  })
   @SwaggerResponse({ status: 200, description: 'File deleted' })
-  async delete(@Param('key') key: string): Promise<void> {
-    return this.uploadService.delete(key);
+  @SwaggerResponse({ status: 403, description: 'Not the uploader and not ADMIN' })
+  @SwaggerResponse({ status: 404, description: 'File not found in R2' })
+  async delete(@CurrentUser() user: JwtGuardUser, @Param('key') key: string): Promise<void> {
+    return this.uploadService.deleteOwned(key, { userId: user.id, role: user.role });
   }
 }

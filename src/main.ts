@@ -19,9 +19,10 @@ import { setLogSink } from '@packages/context/log-sink';
 import { LogService } from './features/log/log.service';
 
 async function bootstrap() {
-  // Fail fast in production: the guest/guest fallback below is for local dev only.
-  if (process.env.NODE_ENV === 'production' && !process.env.RABBITMQ_URL?.trim()) {
-    throw new Error('RABBITMQ_URL is required when NODE_ENV=production');
+  // Required in every environment (no guest/guest fallback): set it in .env.
+  const rabbitMqUrl = process.env.RABBITMQ_URL?.trim();
+  if (!rabbitMqUrl) {
+    throw new Error('RABBITMQ_URL is required');
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -58,7 +59,7 @@ async function bootstrap() {
     {
       transport: Transport.RMQ,
       options: {
-        urls: [process.env.RABBITMQ_URL?.trim() || 'amqp://guest:guest@localhost:5672'],
+        urls: [rabbitMqUrl],
         queue: process.env.THIRD_QUEUE ?? 'third_queue',
         queueOptions: { durable: true },
         // Manual ack (see RmqAckInterceptor): messages stay unacked until the handler finishes,

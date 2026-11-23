@@ -67,7 +67,8 @@ export class EmailService {
 
     return this.sendMail({
       to: params.to,
-      subject: `${params.otp} là mã đặt lại mật khẩu của bạn`,
+      // The code is not put in the subject: subjects show in mail lists and notifications.
+      subject: 'Mã đặt lại mật khẩu của bạn',
       html,
       text,
     });

@@ -8,6 +8,7 @@ const TTL_REQUIRED_PREFIXES = [
   'session:',
   'login-session:',
   'reset-password:',
+  'reset-password-otp',
   'refresh:',
   'refresh-token:',
 ];
@@ -37,19 +38,19 @@ export class RedisRpcController {
 
   @MessagePattern('redis.get')
   get(@Payload() payload: { key: string }) {
-    return this.redisService.get(payload.key);
+    return this.redisService.get(payload?.key);
   }
 
   // Existence only (never the value) — used by the gateway's session check.
   @MessagePattern('redis.exists')
   exists(@Payload() payload: { key: string }) {
-    return this.redisService.exists(payload.key);
+    return this.redisService.exists(payload?.key);
   }
 
   // Remaining TTL in seconds (-1 = no expiry, -2 = missing) — used to report lockout wait time.
   @MessagePattern('redis.ttl')
   ttl(@Payload() payload: { key: string }) {
-    return this.redisService.ttl(payload?.key as string);
+    return this.redisService.ttl(payload?.key);
   }
 
   // Atomic read-and-delete for single-use tokens (reset-password): only one caller gets the value.
@@ -91,7 +92,7 @@ export class RedisRpcController {
       // A session / refresh / reset key without TTL would never expire.
       throw new BadRequestException('ttlSeconds is required for this key');
     }
-    await this.redisService.set(payload.key, payload.value, payload.ttlSeconds);
+    await this.redisService.set(payload?.key, payload?.value, payload?.ttlSeconds);
     return { ok: true };
   }
 

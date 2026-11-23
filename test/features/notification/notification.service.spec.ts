@@ -99,6 +99,51 @@ describe('NotificationService', () => {
       });
     });
 
+    describe('STUDENT -> tutor rules', () => {
+      const studentDto = (overrides: Record<string, unknown> = {}) =>
+        dto({ type: 'TUTOR', userId: OTHER, ...overrides });
+
+      it('creates one TUTOR notification for a tutor who teaches the student', async () => {
+        repo.tutorTeachesStudent.mockResolvedValue(true);
+        repo.createMany.mockResolvedValue([{ id: 'ns' }]);
+
+        await expect(service.createNotificationService(studentDto(), 'STUDENT')).resolves.toEqual({
+          id: 'ns',
+        });
+        expect(repo.tutorTeachesStudent).toHaveBeenCalledWith(ID, OTHER);
+        expect(repo.createMany).toHaveBeenCalledWith([expect.objectContaining({ userId: OTHER })]);
+      });
+
+      it.each([
+        ['another type', { type: 'STUDENT' }],
+        ['a classId', { classId: OTHER }],
+        ['a studentId', { studentId: OTHER }],
+        ['no userId', { userId: undefined }],
+        ['a non-uuid userId', { userId: 'nope' }],
+      ])('refuses %s', async (_label, overrides) => {
+        repo.tutorTeachesStudent.mockResolvedValue(true);
+        await expect(
+          service.createNotificationService(studentDto(overrides), 'STUDENT'),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(repo.createMany).not.toHaveBeenCalled();
+      });
+
+      it('refuses a tutor who does not teach the student', async () => {
+        repo.tutorTeachesStudent.mockResolvedValue(false);
+        await expect(
+          service.createNotificationService(studentDto(), 'STUDENT'),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(repo.createMany).not.toHaveBeenCalled();
+      });
+
+      it('does not widen other roles (PARENT still cannot create)', async () => {
+        await expect(
+          service.createNotificationService(studentDto(), 'PARENT'),
+        ).rejects.toMatchObject({ status: 403 });
+        expect(repo.tutorTeachesStudent).not.toHaveBeenCalled();
+      });
+    });
+
     it('rejects a missing senderId with USER_ID_NOT_VALID and does not write', async () => {
       await expect(
         service.createNotificationService(dto({ senderId: undefined }), 'ADMIN'),
@@ -194,7 +239,7 @@ describe('NotificationService', () => {
     it('findById returns the row when it exists', async () => {
       repo.findById.mockResolvedValue({ id: ID });
 
-      await expect(service.findById(ID, ADMIN)).resolves.toEqual({ id: ID });
+      await expect(service.findById(ID, ADMIN)).resolves.toEqual({ id: ID, detailUrl: '/notifications' });
     });
 
     it('findById throws NotFound when the row is missing', async () => {
@@ -206,7 +251,7 @@ describe('NotificationService', () => {
     it('markAsRead returns the updated row', async () => {
       repo.markAsRead.mockResolvedValue({ id: ID, isRead: true });
 
-      await expect(service.markAsRead(ID, ADMIN)).resolves.toEqual({ id: ID, isRead: true });
+      await expect(service.markAsRead(ID, ADMIN)).resolves.toEqual({ id: ID, isRead: true, detailUrl: '/notifications' });
     });
 
     it('markAsRead throws NotFound when no row matched', async () => {

@@ -1,3 +1,4 @@
+import { withDetailUrl } from './notification.detail-url';
 import {
   BadRequestException,
   ForbiddenException,
@@ -44,6 +45,8 @@ export class NotificationService {
   }
 
   async createNotificationService(dto: CreateNotificationDto, role?: string) {
+    if (role === 'STUDENT') return this.createStudentToTutorNotification(dto);
+
     if (role !== 'ADMIN' && !CREATABLE_TYPES_BY_ROLE[role ?? '']?.includes(dto.type)) {
       throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
     }
@@ -70,6 +73,27 @@ export class NotificationService {
       return this.repo.create({ ...dto, userId: null });
     }
     const [first] = await this.repo.createMany(recipientIds.map((userId) => ({ ...dto, userId })));
+    return first;
+  }
+
+  /**
+   * STUDENT may create exactly one kind: a `TUTOR` notification addressed (userId) to a tutor who
+   * teaches them (e.g. "student submitted an exercise"). No classId/studentId fan-out allowed.
+   */
+  private async createStudentToTutorNotification(dto: CreateNotificationDto) {
+    if (dto.type !== 'TUTOR' || dto.classId || dto.studentId) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+    if (!dto.senderId || !checkUuidValid({ data: dto.senderId })) {
+      throw new BadRequestException(ERROR_MESSAGES.USER_ID_NOT_VALID);
+    }
+    if (!dto.userId || !checkUuidValid({ data: dto.userId })) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+    if (!(await this.repo.tutorTeachesStudent(dto.senderId, dto.userId))) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+    const [first] = await this.repo.createMany([dto]);
     return first;
   }
 
@@ -104,7 +128,8 @@ export class NotificationService {
   }
 
   async findAll(userId: string, query: GetNotificationsQueryDto) {
-    return this.repo.findAll(userId, query);
+    const result = await this.repo.findAll(userId, query);
+    return { ...result, data: result.data.map(withDetailUrl) };
   }
 
   async findById(id: string, actor: NotificationActor) {
@@ -112,7 +137,7 @@ export class NotificationService {
     // Detail is recipient-only (even for ADMIN): other users' notifications are 404.
     const note = await this.repo.findById(id, actor.userId);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
-    return note;
+    return withDetailUrl(note);
   }
 
   async markAsRead(id: string, actor: NotificationActor) {
@@ -120,7 +145,7 @@ export class NotificationService {
     // Recipient-only (even for ADMIN): only the recipient manages read/delete state.
     const note = await this.repo.markAsRead(id, actor.userId);
     if (!note) throw new NotFoundException(ERROR_MESSAGES.NOTIFICATION_NOT_FOUND);
-    return note;
+    return withDetailUrl(note);
   }
 
   async markAllAsRead(userId: string) {

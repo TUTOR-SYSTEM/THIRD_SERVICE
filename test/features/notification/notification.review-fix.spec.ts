@@ -108,7 +108,7 @@ describe('F-13 create permission by role', () => {
     ['SYSTEM', 'TUTOR'],
     ['TUITION', 'TUTOR'],
     ['SYSTEM', 'STUDENT'],
-    ['TUTOR', 'STUDENT'],
+    // STUDENT may create a TUTOR-typed notification only to its own tutor (see notification.service.spec)
     ['STUDENT', 'PARENT'],
   ])('type %s by %s -> 403 and nothing is stored', async (type, role) => {
     const { repo, run } = create(type, role);

@@ -64,8 +64,7 @@ TEST_TOKEN_A=<admin token> bun scripts/test-catalog-e2e.ts  # probes every HTTP 
 ## Writing E2E Tests
 
 - Create `*.e2e-spec.ts` files in `test/`, Jest + Supertest, full request/response cycle.
-- Existing E2E: `test/test-scenario.e2e-spec.ts` (`testscenario.run` against a local fake-gateway
-  HTTP server). Config: `test/jest-e2e.json`.
+- E2E config: `test/jest-e2e.json`. No e2e spec is currently committed (the old `test-scenario` one was removed).
 
 ## Known bugs
 

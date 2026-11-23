@@ -91,7 +91,8 @@ export class UploadService implements OnModuleInit {
   }
 
   private assertValidKey(key: string): void {
-    const validPrefix = key?.startsWith(UPLOAD_KEY_PREFIX) || key?.startsWith(SUBMISSION_KEY_PREFIX);
+    const validPrefix =
+      key?.startsWith(UPLOAD_KEY_PREFIX) || key?.startsWith(SUBMISSION_KEY_PREFIX);
     if (!key || !validPrefix || key.includes('..') || key.includes('\\')) {
       throw new BadRequestException('Invalid file key');
     }
@@ -268,6 +269,31 @@ export class UploadService implements OnModuleInit {
       throw err;
     }
     await s3.send(new DeleteObjectCommand({ Bucket: this.bucket, Key: key }));
+  }
+
+  /**
+   * Ownership check for HTTP deletes: ADMIN may delete anything; everyone else only objects they
+   * uploaded (owner metadata). Unlike downloads, the gateway's `authorized` flag does NOT bypass
+   * this: it only grants read access to a lesson's files, never deletion.
+   */
+  async deleteOwned(key: string, actor: UploadActor): Promise<void> {
+    this.assertValidKey(key);
+    const s3 = this.requireS3();
+    let head: HeadObjectCommandOutput;
+    try {
+      head = await s3.send(new HeadObjectCommand({ Bucket: this.bucket, Key: key }));
+    } catch (err) {
+      const e = err as { name?: string };
+      if (e.name === 'NoSuchKey' || e.name === 'NotFound') {
+        throw new NotFoundException(ERROR_MESSAGES.FILE_NOT_FOUND);
+      }
+      throw err;
+    }
+    const owner = head.Metadata?.[OWNER_METADATA_KEY];
+    if (actor.role !== 'ADMIN' && (!owner || owner !== actor.userId)) {
+      throw new ForbiddenException(ERROR_MESSAGES.PERMISSION_DENIED);
+    }
+    await this.delete(key);
   }
 
   async uploadMultiple(

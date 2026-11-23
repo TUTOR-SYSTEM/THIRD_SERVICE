@@ -23,6 +23,17 @@
             "statusMessage": "Chặn lệnh VCS / hỏi trước khi sửa .env..."
           }
         ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/jev-router/scripts/hook.mjs\" pre",
+            "timeout": 12,
+            "statusMessage": "Jev: checking tool call..."
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -48,6 +59,15 @@
             "statusMessage": "Checking if skills/rules need updating..."
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/jev-router/scripts/stop-report.mjs\"",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
@@ -57,6 +77,16 @@
             "type": "command",
             "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-allow.py\"",
             "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/skills/jev-router/scripts/hook.mjs\" prompt",
+            "timeout": 12,
+            "statusMessage": "Jev: routing prompt..."
           }
         ]
       }

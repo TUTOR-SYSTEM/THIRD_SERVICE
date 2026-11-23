@@ -48,7 +48,8 @@ describe('EmailService', () => {
     const payload = sendMock.mock.calls[0][0];
     expect(payload.from).toBe('Tutor <noreply@tutor.dev>');
     expect(payload.to).toBe('parent@x.dev');
-    expect(payload.subject).toBe('482931 là mã đặt lại mật khẩu của bạn');
+    expect(payload.subject).toBe('Mã đặt lại mật khẩu của bạn');
+    expect(payload.subject).not.toContain('482931');
     // One boxed cell per digit, in order.
     for (const digit of '482931') {
       expect(payload.html).toContain(
