@@ -49,6 +49,17 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-allow.py\"",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   },
   "env": {
