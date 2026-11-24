@@ -26,6 +26,18 @@ const verifyEmailPayloadSchema = z.object({
 });
 
 /**
+ * RPC payload for the account-created mail (login credentials of an account an admin/tutor just
+ * created). `to` is validated like the other mails (TRD3-15); the password is never logged.
+ */
+const accountCreatedPayloadSchema = z.object({
+  to: z.email().max(254),
+  email: z.email().max(254),
+  username: z.string().min(1).max(100),
+  password: z.string().min(1).max(256),
+  displayName: z.string().max(200).nullish(),
+});
+
+/**
  * Message-pattern mirror of `EmailController` — reached by the gateway's/`user`'s
  * `RmqProducer` over the `third_queue` RabbitMQ queue. Delegates to
  * the same, unmodified `EmailService` the HTTP controller uses; no business logic lives here.
@@ -47,6 +59,20 @@ export class EmailRpcController {
     return this.emailService.sendPasswordResetOtpMail({
       to: payload.to,
       otp: payload.otp,
+      displayName: payload.displayName ?? '',
+    });
+  }
+
+  @MessagePattern('email.sendAccountCreated')
+  sendAccountCreated(
+    @Payload(new ZodValidationPipe(accountCreatedPayloadSchema))
+    payload: z.infer<typeof accountCreatedPayloadSchema>,
+  ) {
+    return this.emailService.sendAccountCreatedMail({
+      to: payload.to,
+      email: payload.email,
+      username: payload.username,
+      password: payload.password,
       displayName: payload.displayName ?? '',
     });
   }

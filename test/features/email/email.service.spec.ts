@@ -53,7 +53,7 @@ describe('EmailService', () => {
     // One boxed cell per digit, in order.
     for (const digit of '482931') {
       expect(payload.html).toContain(
-        `font-size:28px;font-weight:700;color:#0f172a;">${digit}</td>`,
+        `font-size:28px;font-weight:700;color:#16302b;animation:otpDigitIn 0.9s ease-out ${('482931'.indexOf(digit) * 0.12).toFixed(2)}s both;">${digit}</td>`,
       );
     }
     expect(payload.html).toContain('Mã có hiệu lực trong 5 phút');
