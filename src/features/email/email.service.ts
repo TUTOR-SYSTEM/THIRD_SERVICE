@@ -4,6 +4,7 @@ import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { SendMailOptions } from '@packages/interfaces';
 import { renderPasswordResetOtpEmail } from './templates/password-reset-otp.template';
+import { renderAccountCreatedEmail } from './templates/account-created.template';
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -82,6 +83,33 @@ export class EmailService {
       to: params.to,
       // The code is not put in the subject: subjects show in mail lists and notifications.
       subject: 'Mã đặt lại mật khẩu của bạn',
+      html,
+      text,
+    });
+  }
+
+  /**
+   * Sends login credentials to a newly created account. The password is put in the body only: never
+   * in the subject, and never logged (see `sendMail`).
+   */
+  async sendAccountCreatedMail(params: {
+    to: string;
+    displayName: string;
+    email: string;
+    username: string;
+    password: string;
+  }) {
+    const { html, text } = renderAccountCreatedEmail({
+      displayName: params.displayName,
+      email: params.email,
+      username: params.username,
+      password: params.password,
+      loginUrl: `${this.resetPasswordUrlBase}/login`,
+    });
+
+    return this.sendMail({
+      to: params.to,
+      subject: 'Tài khoản của bạn đã được tạo',
       html,
       text,
     });
