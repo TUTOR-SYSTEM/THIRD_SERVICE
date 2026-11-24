@@ -34,6 +34,7 @@ import {
   OWNER_METADATA_KEY,
   PRESIGNED_DOWNLOAD_TTL_SECONDS,
   S3_CLIENT,
+  MAX_IMAGE_PIXELS,
   UPLOAD_FILES_PER_MINUTE,
   SUBMISSION_KEY_PREFIX,
   UPLOAD_KEY_PREFIX,
@@ -91,8 +92,8 @@ export class UploadService implements OnModuleInit {
   }
 
   private assertValidKey(key: string): void {
-    const validPrefix =
-      key?.startsWith(UPLOAD_KEY_PREFIX) || key?.startsWith(SUBMISSION_KEY_PREFIX);
+    if (typeof key !== 'string') throw new BadRequestException('Invalid file key');
+    const validPrefix = key.startsWith(UPLOAD_KEY_PREFIX) || key.startsWith(SUBMISSION_KEY_PREFIX);
     if (!key || !validPrefix || key.includes('..') || key.includes('\\')) {
       throw new BadRequestException('Invalid file key');
     }
@@ -116,10 +117,8 @@ export class UploadService implements OnModuleInit {
     const key = `upload-rate:${userId}:${window}`;
     let used: number;
     try {
-      used = await this.redisService.client.incrby(key, fileCount);
-      if (used === fileCount) {
-        await this.redisService.client.expire(key, 120);
-      }
+      // Atomic INCRBY + EXPIRE: a crash in between can never leave a counter without a TTL.
+      used = await this.redisService.incrByWithWindow(key, fileCount, 120);
     } catch (err) {
       this.logger.warn(`Upload quota unavailable, failing open: ${(err as Error).message}`);
       return;
@@ -145,12 +144,18 @@ export class UploadService implements OnModuleInit {
       );
     }
     const mimetype = (file.mimetype ?? '').toLowerCase();
+    if (typeof file.originalname !== 'string' || file.originalname.length === 0) {
+      throw new BadRequestException('File name is required');
+    }
     const dot = file.originalname.lastIndexOf('.');
     const originalExt = dot >= 0 ? file.originalname.slice(dot + 1).toLowerCase() : '';
     const isImage = IMAGE_EXTENSIONS.has(originalExt);
     const documentType = DOCUMENT_CONTENT_TYPES[originalExt];
     if (BLOCKED_MIMETYPES.has(mimetype) || (!isImage && !documentType)) {
       throw new BadRequestException('File type is not allowed');
+    }
+    if (!isImage && !this.matchesDocumentSignature(originalExt, file.buffer)) {
+      throw new BadRequestException('File content does not match its extension');
     }
     // Images are always re-encoded to JPEG below, so key/mimetype must say so.
     const ext = isImage ? 'jpg' : originalExt;
@@ -162,7 +167,8 @@ export class UploadService implements OnModuleInit {
 
     if (isImage) {
       try {
-        processedBuffer = await sharp(file.buffer)
+        // Pixel cap guards against decompression bombs (a small file that decodes to GBs of RAM).
+        processedBuffer = await sharp(file.buffer, { limitInputPixels: MAX_IMAGE_PIXELS })
           .rotate()
           .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
           .jpeg({ quality: 80, mozjpeg: true })
@@ -185,6 +191,32 @@ export class UploadService implements OnModuleInit {
     );
 
     return { url, key, size: processedBuffer.length, mimetype: contentType };
+  }
+
+  /** Magic-byte check so a renamed binary cannot pass as a document (extension alone is client-controlled). */
+  private matchesDocumentSignature(ext: string, buf: Buffer): boolean {
+    const startsWith = (...bytes: number[]) => bytes.every((b, i) => buf[i] === b);
+    switch (ext) {
+      case 'pdf':
+        return startsWith(0x25, 0x50, 0x44, 0x46); // %PDF
+      case 'docx':
+      case 'xlsx':
+      case 'pptx':
+      case 'zip':
+        return startsWith(0x50, 0x4b); // PK
+      case 'doc':
+      case 'xls':
+      case 'ppt':
+        return startsWith(0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1); // OLE2
+      case 'mp4':
+        return buf.length > 12 && buf.subarray(4, 8).toString('latin1') === 'ftyp';
+      case 'mp3':
+        return startsWith(0x49, 0x44, 0x33) || (buf[0] === 0xff && (buf[1] & 0xe0) === 0xe0);
+      case 'txt':
+        return !buf.subarray(0, 8000).includes(0); // no NUL bytes => text
+      default:
+        return false;
+    }
   }
 
   getPublicUrl(key: string): string {

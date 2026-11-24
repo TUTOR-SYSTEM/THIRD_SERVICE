@@ -38,6 +38,18 @@ or different in third-service.
 - **Redis**: `RedisService` rejects an empty key, a non-string value, and a `ttlSeconds` that isn't a
   positive number (400) — a bad TTL must never create a key that never expires. Commands time out
   after 5s; `TokenBucketGuard` fails open (and keys by route pattern) when Redis is down.
+- **JwtAuthGuard also checks the DB role** (2026-11-24): after the Redis session check it loads
+  `isActive` + `role` and rejects (401) a token whose `role` differs from the user row.
+  `LogGateway` (`/logs`) does the same (session in Redis, `isActive`, `role === 'ADMIN'`, token must carry `sid`).
+- **Swagger is opt-in**: only when `NODE_ENV` is development/test or `ENABLE_SWAGGER=true` (unset
+  `NODE_ENV` no longer exposes `/api-docs`). `main.ts` calls `app.enableShutdownHooks()`.
+- **No raw error text to HTTP clients**: `ErrorInterceptor` always answers non-HTTP, non-constraint errors with
+  "Internal server error" (real message only in logs). Seed scripts import `scripts/_guard-not-production.ts`.
+  SMTP uses `requireTLS` when auth is set plus connection/socket timeouts; multer also caps `fields`/`parts`.
+- **`log.create` clips, never rejects**: oversized text fields are truncated (schema `transform`) so the row is kept.
+  Don't use `ZodValidationPipe` for plain string params (it JSON-parses strings); `generateCode` uses `crypto.randomInt`.
+- **Size caps on free text**: notification `content` ≤ 5000, `metadata` ≤ 10KB; `log.create`
+  text fields ≤ 10k and ids ≤ 100 chars — keep caps when adding fields.
 - **Never log connection strings/secrets** (e.g. `DATABASE_URL`), and never use `redis KEYS` —
   use `SCAN` + `MGET` (see `health.redis` in `app.controller.ts`). HTML emails must
   `escapeHtml` user-supplied values.

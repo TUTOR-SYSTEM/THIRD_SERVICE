@@ -11,6 +11,7 @@
  * Optional: SEED_SUFFIX=<string> to avoid unique-constraint collisions on rerun (default: timestamp)
  */
 import 'dotenv/config';
+import './_guard-not-production';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -49,7 +50,11 @@ const SHARED_PASSWORD = 'Demo@123456';
 
 type FileRef = { name: string; url: string; key: string };
 
-function file(kind: 'ly-thuyet' | 'bai-tap-1' | 'bai-tap-2', chapterIdx: number, lessonIdx: number): FileRef {
+function file(
+  kind: 'ly-thuyet' | 'bai-tap-1' | 'bai-tap-2',
+  chapterIdx: number,
+  lessonIdx: number,
+): FileRef {
   const key = `curriculum-${suffix}/chuong-${chapterIdx}/bai-${lessonIdx}/${kind}.pdf`;
   return {
     name: `${kind}.pdf`,
@@ -89,7 +94,8 @@ async function main() {
   let tutor: typeof users.$inferSelect | undefined;
   if (tutorEmail) {
     [tutor] = await db.select().from(users).where(eq(users.email, tutorEmail)).limit(1);
-    if (!tutor) console.log(`(SEED_TUTOR_EMAIL "${tutorEmail}" not found — creating new demo tutor)`);
+    if (!tutor)
+      console.log(`(SEED_TUTOR_EMAIL "${tutorEmail}" not found — creating new demo tutor)`);
   }
   if (!tutor) {
     const tutorPassword = await hashData(SHARED_PASSWORD);

@@ -28,20 +28,43 @@ describe('LogGateway', () => {
   let config: Record<string, string | undefined>;
   const configService = { get: jest.fn((key: string) => config[key]) } as never;
 
-  const adminPayload = { sub: 'admin-1', role: 'ADMIN', typ: 'access' };
+  const adminPayload = { sub: 'admin-1', role: 'ADMIN', typ: 'access', sid: 'sid-1' };
+  const redis = { exists: jest.fn().mockResolvedValue(true) };
 
   beforeEach(() => {
     jest.clearAllMocks();
     config = { JWT_ACCESS_SECRET: 'access-secret' };
     verify.mockReturnValue(adminPayload);
+    redis.exists.mockResolvedValue(true);
   });
 
-  const build = (rows: unknown[] = [{ id: 'admin-1' }]) => {
+  const build = (rows: unknown[] = [{ id: 'admin-1', isActive: true, role: 'ADMIN' }]) => {
     const { db } = dbReturning(rows);
-    return { gateway: new LogGateway(jwtService, configService, db as never), db };
+    return { gateway: new LogGateway(jwtService, configService, db as never, redis as never), db };
   };
 
   describe('handleConnection', () => {
+    it('disconnects when the session no longer exists in Redis', async () => {
+      redis.exists.mockResolvedValue(false);
+      const { gateway } = build();
+      const socket = client({ auth: { token: 't' } });
+      await gateway.handleConnection(socket as never);
+      expect(socket.disconnect).toHaveBeenCalledTimes(1);
+      expect(redis.exists).toHaveBeenCalledWith('session:admin-1:sid-1');
+    });
+
+    it('disconnects when the admin was deactivated or demoted', async () => {
+      for (const row of [
+        { id: 'admin-1', isActive: false, role: 'ADMIN' },
+        { id: 'admin-1', isActive: true, role: 'TUTOR' },
+      ]) {
+        const { gateway } = build([row]);
+        const socket = client({ auth: { token: 't' } });
+        await gateway.handleConnection(socket as never);
+        expect(socket.disconnect).toHaveBeenCalledTimes(1);
+      }
+    });
+
     it('disconnects when no token is sent in the handshake auth or headers', async () => {
       const { gateway } = build();
       const socket = client();
@@ -145,7 +168,10 @@ describe('LogGateway', () => {
     it('looks the user up by the sub claim', async () => {
       const { gateway, where, limit } = (() => {
         const r = dbReturning([{ id: 'admin-1' }]);
-        return { ...r, gateway: new LogGateway(jwtService, configService, r.db as never) };
+        return {
+          ...r,
+          gateway: new LogGateway(jwtService, configService, r.db as never, redis as never),
+        };
       })();
       await gateway.handleConnection(client({ auth: { token: 't' } }) as never);
       expect(where).toHaveBeenCalledTimes(1);
@@ -167,7 +193,7 @@ describe('LogGateway', () => {
       const db = {
         select: jest.fn(() => ({ from: () => ({ where: () => ({ limit }) }) })),
       };
-      const gateway = new LogGateway(jwtService, configService, db as never);
+      const gateway = new LogGateway(jwtService, configService, db as never, redis as never);
       const socket = client({ auth: { token: 't' } });
       await expect(gateway.handleConnection(socket as never)).resolves.toBeUndefined();
       expect(socket.disconnect).toHaveBeenCalledTimes(1);

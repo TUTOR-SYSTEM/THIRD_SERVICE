@@ -33,11 +33,24 @@ export class EmailService {
       throw new Error('SMTP_USER and SMTP_PASS must be set together');
     }
 
+    if (
+      process.env.NODE_ENV === 'production' &&
+      !this.configService.get<string>('PASSWORD_RESET_URL_BASE')
+    ) {
+      this.logger.warn('PASSWORD_RESET_URL_BASE is unset: verify-email links point at localhost');
+    }
+
     this.transporter = nodemailer.createTransport({
       host,
       port,
       secure: secure === 'true',
+      // Credentials must never go out in clear text: refuse to continue without STARTTLS.
+      requireTLS: secure !== 'true' && !!(user && pass),
       auth: user && pass ? { user, pass } : undefined,
+      // Bounded so a dead SMTP host cannot hold an RPC caller for minutes.
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 20_000,
     });
   }
 
@@ -81,7 +94,7 @@ export class EmailService {
     return this.sendMail({
       to: params.to,
       subject: 'Verify your email address',
-      html: `<p>Hi ${escapeHtml(params.displayName)},</p><p>Thanks for signing up. Please confirm that this email address belongs to you by clicking the link below:</p><p><a href="${verifyUrl}">${verifyUrl}</a></p><p>This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>`,
+      html: `<p>Hi ${escapeHtml(params.displayName)},</p><p>Thanks for signing up. Please confirm that this email address belongs to you by clicking the link below:</p><p><a href="${escapeHtml(verifyUrl)}">${escapeHtml(verifyUrl)}</a></p><p>This link expires in 24 hours. If you didn't create an account, you can ignore this email.</p>`,
       text: `Hi ${params.displayName}, verify your email here: ${verifyUrl} (expires in 24 hours)`,
     });
   }

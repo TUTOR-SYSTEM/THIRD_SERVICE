@@ -7,6 +7,7 @@
  *   SEED_EMAIL_DOMAIN=example.test (default example.test) → user001@example.test
  */
 import 'dotenv/config';
+import './_guard-not-production';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { inArray, or } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -109,8 +110,12 @@ async function main(): Promise<void> {
   }
 
   const skipped = count - toCreate.length;
-  console.log(`Inserted ${toCreate.length} user(s); skipped ${skipped} (email or username already taken).`);
-  console.log(`Email pattern: seeduser${padIndex(1, width)}@${domain} … seeduser${padIndex(count, width)}@${domain}`);
+  console.log(
+    `Inserted ${toCreate.length} user(s); skipped ${skipped} (email or username already taken).`,
+  );
+  console.log(
+    `Email pattern: seeduser${padIndex(1, width)}@${domain} … seeduser${padIndex(count, width)}@${domain}`,
+  );
   console.log('Shared password: (value of SEED_PASSWORD env or default Test@12345)');
   await client.end({ timeout: 5 });
 }

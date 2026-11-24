@@ -199,12 +199,13 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const rows = await this.db
-      .select({ id: users.id, isActive: users.isActive })
+      .select({ id: users.id, isActive: users.isActive, role: users.role })
       .from(users)
       .where(eq(users.id, payload.id))
       .limit(1);
 
-    if (rows.length === 0 || !rows[0].isActive) {
+    // Role comes from the DB too: a demoted/changed user is refused even with a still-valid token.
+    if (rows.length === 0 || !rows[0].isActive || rows[0].role !== payload.role) {
       throw new UnauthorizedException('Unauthorized ...');
     }
 

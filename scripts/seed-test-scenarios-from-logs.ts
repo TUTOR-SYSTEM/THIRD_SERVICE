@@ -13,6 +13,7 @@
  * feed on itself.
  */
 import 'dotenv/config';
+import './_guard-not-production';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
@@ -102,7 +103,11 @@ async function main(): Promise<void> {
     const method = s.method!.toUpperCase();
     const status = s.statusCode!;
     if (!SAFE_METHODS.includes(method)) continue;
-    if (EXCLUDED_PREFIXES.some((p) => s.path === p || s.path.startsWith(`${p}/`) || s.path.startsWith(`${p}?`))) {
+    if (
+      EXCLUDED_PREFIXES.some(
+        (p) => s.path === p || s.path.startsWith(`${p}/`) || s.path.startsWith(`${p}?`),
+      )
+    ) {
       continue;
     }
 

@@ -6,6 +6,7 @@
  * If you need to seed wallets, uncomment the wallets table first.
  */
 import 'dotenv/config';
+import './_guard-not-production';
 
 function main(): void {
   console.log('Wallets table is currently disabled (commented out in schema.ts).');

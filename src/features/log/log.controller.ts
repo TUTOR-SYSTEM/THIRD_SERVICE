@@ -1,4 +1,12 @@
-import { Controller, Get, HttpCode, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -47,6 +55,10 @@ export class LogController {
   @ApiParam({ name: 'correlationId', type: String })
   @SwaggerResponse({ status: 200, description: 'Trace fetched' })
   async trace(@Param('correlationId') correlationId: string) {
+    // Manual check (not ZodValidationPipe): that pipe JSON-parses strings, so "123" would become a number.
+    if (!correlationId || correlationId.length > 100) {
+      throw new BadRequestException('correlationId must be 1-100 characters');
+    }
     return this.logService.findByCorrelationId(correlationId);
   }
 

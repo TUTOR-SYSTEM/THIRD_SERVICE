@@ -33,7 +33,10 @@ describe('UploadService — key and mimetype edge cases', () => {
   });
 
   it('keeps the original extension for non-images', async () => {
-    const res = await service.upload(file('notes.final.pdf', 'application/pdf'), 'docs');
+    const res = await service.upload(
+      file('notes.final.pdf', 'application/pdf', Buffer.from('%PDF-1.4')),
+      'docs',
+    );
     expect(res.key).toMatch(/^docs\/test-uuid\.pdf$/);
     expect(res.url).toBe(`https://cdn.test/${res.key}`);
   });

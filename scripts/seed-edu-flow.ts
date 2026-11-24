@@ -7,6 +7,7 @@
  * Requires the dev server to be running (port 8888).
  */
 import 'dotenv/config';
+import './_guard-not-production';
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import * as schema from '../src/database/schema';
@@ -66,10 +67,10 @@ async function main() {
   const gradeId = grade.id;
 
   // 1. Login
-  const auth = await post<{ accessToken: string; user: { id: string } }>(
-    '/auth/login',
-    { email: TUTOR_EMAIL, password: TUTOR_PASSWORD },
-  );
+  const auth = await post<{ accessToken: string; user: { id: string } }>('/auth/login', {
+    email: TUTOR_EMAIL,
+    password: TUTOR_PASSWORD,
+  });
   const token = auth.accessToken;
   const tutorId = auth.user.id;
   log('login', tutorId);

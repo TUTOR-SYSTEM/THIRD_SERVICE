@@ -6,6 +6,7 @@
  * If you need to seed categories, uncomment the categories table first.
  */
 import 'dotenv/config';
+import './_guard-not-production';
 
 function main(): void {
   console.log('Categories table is currently disabled (commented out in schema.ts).');

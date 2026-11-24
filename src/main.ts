@@ -32,6 +32,10 @@ async function bootstrap() {
   // Fail fast at boot when no JWT secret is configured (no insecure fallback).
   getJwtTokensConfig(app.get(ConfigService));
 
+  // Run onModuleDestroy (Redis quit, etc.) and drain RMQ on SIGTERM/SIGINT.
+  app.enableShutdownHooks();
+  app.disable('x-powered-by');
+
   const trustProxy = resolveTrustProxy();
   if (trustProxy !== undefined) {
     app.set('trust proxy', trustProxy);
@@ -80,7 +84,12 @@ async function bootstrap() {
   // Ack interceptor is outermost so it also sees failures raised by TraceContextInterceptor.
   rmqMicroservice.useGlobalInterceptors(new RmqAckInterceptor(), new TraceContextInterceptor());
 
-  if (process.env.NODE_ENV !== 'production') {
+  // Opt-in: Swagger only in development/test or when ENABLE_SWAGGER=true (unset NODE_ENV is not enough).
+  const swaggerEnabled =
+    process.env.ENABLE_SWAGGER === 'true' ||
+    process.env.NODE_ENV === 'development' ||
+    process.env.NODE_ENV === 'test';
+  if (swaggerEnabled) {
     const config = new DocumentBuilder()
       .setTitle('Third Service API')
       .setDescription(

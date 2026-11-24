@@ -21,12 +21,12 @@ const student = { userId: 'stu-1', role: 'STUDENT' };
 
 describe('UploadService ownership, presign and quota', () => {
   let s3: { send: jest.Mock };
-  let redis: { client: { incrby: jest.Mock; expire: jest.Mock } };
+  let redis: { incrByWithWindow: jest.Mock };
 
   beforeEach(() => {
     jest.clearAllMocks();
     s3 = { send: jest.fn() };
-    redis = { client: { incrby: jest.fn(), expire: jest.fn() } };
+    redis = { incrByWithWindow: jest.fn() };
   });
 
   const service = (withRedis = true) =>
@@ -43,8 +43,8 @@ describe('UploadService ownership, presign and quota', () => {
         {
           originalname: 'a.pdf',
           mimetype: 'application/pdf',
-          buffer: Buffer.from('abc'),
-          size: 3,
+          buffer: Buffer.from('%PDF-1.4 abc'),
+          size: 12,
         } as never,
         'uploads',
         'tutor-1',
@@ -144,18 +144,16 @@ describe('UploadService ownership, presign and quota', () => {
 
   describe('consumeUploadQuota', () => {
     it('counts files in a per-minute window and sets the expiry on the first write', async () => {
-      redis.client.incrby.mockResolvedValue(3);
-      redis.client.expire.mockResolvedValue(1);
+      redis.incrByWithWindow.mockResolvedValue(3);
 
       await service().consumeUploadQuota('tutor-1', 3);
 
-      expect(redis.client.incrby.mock.calls[0][0]).toMatch(/^upload-rate:tutor-1:\d+$/);
-      expect(redis.client.incrby).toHaveBeenCalledWith(expect.any(String), 3);
-      expect(redis.client.expire).toHaveBeenCalledWith(expect.any(String), 120);
+      expect(redis.incrByWithWindow.mock.calls[0][0]).toMatch(/^upload-rate:tutor-1:\d+$/);
+      expect(redis.incrByWithWindow).toHaveBeenCalledWith(expect.any(String), 3, 120);
     });
 
     it('throws 429 once the user exceeds the per-minute quota', async () => {
-      redis.client.incrby.mockResolvedValue(31);
+      redis.incrByWithWindow.mockResolvedValue(31);
 
       await expect(service().consumeUploadQuota('tutor-1', 1)).rejects.toMatchObject({
         status: 429,
@@ -166,13 +164,13 @@ describe('UploadService ownership, presign and quota', () => {
     });
 
     it('fails open when Redis errors', async () => {
-      redis.client.incrby.mockRejectedValue(new Error('down'));
+      redis.incrByWithWindow.mockRejectedValue(new Error('down'));
       await expect(service().consumeUploadQuota('tutor-1', 1)).resolves.toBeUndefined();
     });
 
     it('is a no-op when Redis is not wired', async () => {
       await expect(service(false).consumeUploadQuota('tutor-1', 1)).resolves.toBeUndefined();
-      expect(redis.client.incrby).not.toHaveBeenCalled();
+      expect(redis.incrByWithWindow).not.toHaveBeenCalled();
     });
   });
 });

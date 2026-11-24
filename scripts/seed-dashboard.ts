@@ -16,6 +16,7 @@
  *   TUTOR_EMAIL=someone@x.com bun scripts/seed-dashboard.ts
  */
 import 'dotenv/config';
+import './_guard-not-production';
 import { randomUUID } from 'node:crypto';
 import { and, eq, ilike, like } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -264,10 +265,26 @@ async function main(): Promise<void> {
       .delete(notifications)
       .where(and(eq(notifications.userId, tutorId), ilike(notifications.title, '[demo]%')));
     const notes = [
-      { type: 'TUITION' as const, title: '[demo] Học phí mới được thanh toán', content: 'Một học sinh vừa đóng học phí tháng này.' },
-      { type: 'STUDENT' as const, title: '[demo] Học sinh mới đăng ký', content: 'Có học sinh mới tham gia lớp Toán 10A.' },
-      { type: 'SYSTEM' as const, title: '[demo] Nhắc lịch dạy', content: 'Bạn có buổi dạy hôm nay lúc 17:30.' },
-      { type: 'TUTOR' as const, title: '[demo] Báo cáo tuần', content: 'Tổng kết hoạt động giảng dạy trong tuần đã sẵn sàng.' },
+      {
+        type: 'TUITION' as const,
+        title: '[demo] Học phí mới được thanh toán',
+        content: 'Một học sinh vừa đóng học phí tháng này.',
+      },
+      {
+        type: 'STUDENT' as const,
+        title: '[demo] Học sinh mới đăng ký',
+        content: 'Có học sinh mới tham gia lớp Toán 10A.',
+      },
+      {
+        type: 'SYSTEM' as const,
+        title: '[demo] Nhắc lịch dạy',
+        content: 'Bạn có buổi dạy hôm nay lúc 17:30.',
+      },
+      {
+        type: 'TUTOR' as const,
+        title: '[demo] Báo cáo tuần',
+        content: 'Tổng kết hoạt động giảng dạy trong tuần đã sẵn sàng.',
+      },
     ];
     await db.insert(notifications).values(
       notes.map((n, i) => ({
