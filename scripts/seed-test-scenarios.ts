@@ -11,6 +11,7 @@
  * Validation failures are 422 (gateway `ZodValidationPipe`); wrong credentials are 400.
  */
 import 'dotenv/config';
+import './_guard-not-production';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';

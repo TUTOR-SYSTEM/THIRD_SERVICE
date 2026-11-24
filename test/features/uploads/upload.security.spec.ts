@@ -40,12 +40,15 @@ describe('uploads review fixes (group B)', () => {
   afterEach(() => jest.restoreAllMocks());
 
   describe('HTTP controller metadata', () => {
-    it.each(['upload', 'uploadMultiple', 'download', 'delete'] as const)('%s requires a JWT (not @Public)', (h) => {
-      const r = new Reflector();
-      expect(
-        r.getAllAndOverride(IS_PUBLIC_KEY, [UploadController.prototype[h], UploadController]),
-      ).toBeFalsy();
-    });
+    it.each(['upload', 'uploadMultiple', 'download', 'delete'] as const)(
+      '%s requires a JWT (not @Public)',
+      (h) => {
+        const r = new Reflector();
+        expect(
+          r.getAllAndOverride(IS_PUBLIC_KEY, [UploadController.prototype[h], UploadController]),
+        ).toBeFalsy();
+      },
+    );
 
     it('multer limits 10MB / 5 files (contract C5)', () => {
       const imports = Reflect.getMetadata('imports', UploadModule) as any[];
@@ -88,7 +91,9 @@ describe('uploads review fixes (group B)', () => {
     it('docx: attachment disposition, whitelisted content type and ext', async () => {
       const { svc, send } = mk();
       const docx = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-      const res = await svc.upload(f({ originalname: 'Report.DOCX', mimetype: docx }));
+      const res = await svc.upload(
+        f({ originalname: 'Report.DOCX', mimetype: docx, buffer: Buffer.from('PK\x03\x04docx') }),
+      );
       const put = send.mock.calls.map((c) => c[0]).find((c) => c instanceof PutObjectCommand);
       expect(put.input.ContentDisposition).toBe('attachment');
       expect(put.input.ContentType).toBe(docx);

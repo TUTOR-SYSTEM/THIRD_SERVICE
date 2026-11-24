@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './_guard-not-production';
 import { randomUUID } from 'node:crypto';
 import { eq, ilike } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -48,7 +49,7 @@ const SEED_ACCOUNTS = [
     firstName: 'Student',
     lastName: 'Account',
     password: 'Student@123456',
-    userCode : "ABC123",
+    userCode: 'ABC123',
     role: 'STUDENT' as const,
   },
   {
@@ -56,7 +57,7 @@ const SEED_ACCOUNTS = [
     username: 'parent',
     firstName: 'Parent',
     lastName: 'Account',
-    userCode : "ABC456",
+    userCode: 'ABC456',
     password: 'Parent@123456',
     role: 'PARENT' as const,
   },

@@ -45,6 +45,14 @@ end
 return count
 `;
 
+const INCRBY_WITH_WINDOW_SCRIPT = `
+local count = redis.call('INCRBY', KEYS[1], ARGV[1])
+if redis.call('TTL', KEYS[1]) < 0 then
+  redis.call('EXPIRE', KEYS[1], ARGV[2])
+end
+return count
+`;
+
 @Injectable()
 export class RedisService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RedisService.name);
@@ -213,6 +221,21 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('windowSeconds must be a positive integer');
     }
     const count = await this.client.eval(INCR_WITH_WINDOW_SCRIPT, 1, key, windowSeconds);
+    return Number(count);
+  }
+
+  /** Atomic INCRBY that also guarantees the key has a TTL (set when missing). */
+  async incrByWithWindow(key: string, amount: number, windowSeconds: number): Promise<number> {
+    if (typeof key !== 'string' || key.length === 0) {
+      throw new BadRequestException('key is required');
+    }
+    if (!Number.isInteger(amount) || amount <= 0) {
+      throw new BadRequestException('amount must be a positive integer');
+    }
+    if (!Number.isInteger(windowSeconds) || windowSeconds <= 0) {
+      throw new BadRequestException('windowSeconds must be a positive integer');
+    }
+    const count = await this.client.eval(INCRBY_WITH_WINDOW_SCRIPT, 1, key, amount, windowSeconds);
     return Number(count);
   }
 

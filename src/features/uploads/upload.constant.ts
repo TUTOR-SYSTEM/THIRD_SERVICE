@@ -3,6 +3,8 @@ export const UPLOAD_DIR = 'uploads';
 
 /** Per-file cap enforced by Multer (HTTP) and by `UploadService.upload` (RPC path). */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** Max decoded pixels per image (~40MP) — decompression-bomb guard for sharp. */
+export const MAX_IMAGE_PIXELS = 40_000_000;
 /** Files per multipart / RPC batch request (contract C5). */
 export const MAX_UPLOAD_FILES = 5;
 /** Per-user quota: files uploaded per rolling minute (fixed window, shared across instances via Redis). */

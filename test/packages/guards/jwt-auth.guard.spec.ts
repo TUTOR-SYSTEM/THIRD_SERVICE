@@ -35,7 +35,7 @@ describe('JwtAuthGuard', () => {
     reflector = { getAllAndOverride: jest.fn().mockReturnValue(false) };
     jwt = { verify: jest.fn().mockReturnValue(validPayload) };
     config = { get: jest.fn().mockReturnValue('access-secret') };
-    userRows = [{ id: USER_ID, isActive: true }];
+    userRows = [{ id: USER_ID, isActive: true, role: 'TUTOR' }];
     redis = { exists: jest.fn().mockResolvedValue(true) };
 
     const limit = jest.fn(async () => userRows);
@@ -193,5 +193,11 @@ describe('JwtAuthGuard', () => {
     await guard.canActivate(contextWith({ authorization: 'Bearer t' }).ctx);
 
     expect(redis.exists).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects a token whose role no longer matches the user row', async () => {
+    userRows = [{ id: USER_ID, isActive: true, role: 'STUDENT' }];
+    const { ctx } = contextWith({ authorization: 'Bearer t' });
+    await expect(guard.canActivate(ctx)).rejects.toThrow(UnauthorizedException);
   });
 });

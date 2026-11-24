@@ -32,8 +32,8 @@ export class ErrorInterceptor implements NestInterceptor {
           return 'Value violates check constraint';
       }
     }
-    const message = error instanceof Error ? error.message : 'Internal server error';
-    return message.startsWith('Failed query:') ? 'Database error' : message;
+    // Never relay raw error text (SDK/Redis/SQL messages carry hosts, keys, params): log only.
+    return 'Internal server error';
   }
 
   /**

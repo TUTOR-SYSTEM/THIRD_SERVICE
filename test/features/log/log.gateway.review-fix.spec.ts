@@ -2,12 +2,13 @@ import { LogGateway } from 'src/features/log/log.gateway';
 
 const mk = (verifyResult: unknown, config: Record<string, string | undefined>) => {
   const verify = jest.fn().mockReturnValue(verifyResult);
-  const limit = jest.fn(async () => [{ id: 'admin-1' }]);
+  const limit = jest.fn(async () => [{ id: 'admin-1', isActive: true, role: 'ADMIN' }]);
   const db = { select: () => ({ from: () => ({ where: () => ({ limit }) }) }) };
   const gateway = new LogGateway(
     { verify } as any,
     { get: jest.fn((k: string) => config[k]) } as any,
     db as any,
+    { exists: jest.fn().mockResolvedValue(true) } as any,
   );
   const client: any = {
     handshake: { auth: { token: 'tok' }, headers: {} },
@@ -22,7 +23,10 @@ describe('LogGateway (review-fix)', () => {
 
   // F-04
   it('does not verify with a hardcoded fallback secret when none is configured', async () => {
-    const { gateway, client, verify } = mk({ sub: 'admin-1', role: 'ADMIN', typ: 'access' }, {});
+    const { gateway, client, verify } = mk(
+      { sub: 'admin-1', role: 'ADMIN', typ: 'access', sid: 's1' },
+      {},
+    );
     await gateway.handleConnection(client);
     expect(client.disconnect).toHaveBeenCalled();
     for (const c of verify.mock.calls) expect(c[1].secret).not.toMatch(/dev-insecure/);
@@ -31,7 +35,7 @@ describe('LogGateway (review-fix)', () => {
   // F-17
   it('joins the admins room only after ADMIN auth succeeds', async () => {
     const { gateway, client } = mk(
-      { sub: 'admin-1', role: 'ADMIN', typ: 'access' },
+      { sub: 'admin-1', role: 'ADMIN', typ: 'access', sid: 's1' },
       { JWT_ACCESS_SECRET: 's' },
     );
     await gateway.handleConnection(client);
@@ -40,7 +44,7 @@ describe('LogGateway (review-fix)', () => {
 
   it('does not join admins for a non-admin token', async () => {
     const { gateway, client } = mk(
-      { sub: 'u', role: 'STUDENT', typ: 'access' },
+      { sub: 'u', role: 'STUDENT', typ: 'access', sid: 's1' },
       { JWT_ACCESS_SECRET: 's' },
     );
     await gateway.handleConnection(client);
@@ -66,7 +70,7 @@ describe('LogGateway (review-fix)', () => {
     jest.useFakeTimers();
     const exp = Math.floor(Date.now() / 1000) + 60;
     const { gateway, client } = mk(
-      { sub: 'admin-1', role: 'ADMIN', typ: 'access', exp },
+      { sub: 'admin-1', role: 'ADMIN', typ: 'access', sid: 's1', exp },
       { JWT_ACCESS_SECRET: 's' },
     );
     await gateway.handleConnection(client);
@@ -82,7 +86,7 @@ describe('LogGateway expiry timers (review-fix F-17)', () => {
   it('sets no timer when the token has no exp', async () => {
     jest.useFakeTimers();
     const { gateway, client } = mk(
-      { sub: 'admin-1', role: 'ADMIN', typ: 'access' },
+      { sub: 'admin-1', role: 'ADMIN', typ: 'access', sid: 's1' },
       { JWT_ACCESS_SECRET: 's' },
     );
     client.id = 'c1';
@@ -94,7 +98,7 @@ describe('LogGateway expiry timers (review-fix F-17)', () => {
     jest.useFakeTimers();
     const exp = Math.floor(Date.now() / 1000) + 60;
     const { gateway, client } = mk(
-      { sub: 'admin-1', role: 'ADMIN', typ: 'access', exp },
+      { sub: 'admin-1', role: 'ADMIN', typ: 'access', sid: 's1', exp },
       { JWT_ACCESS_SECRET: 's' },
     );
     client.id = 'c1';

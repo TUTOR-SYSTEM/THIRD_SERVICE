@@ -104,12 +104,16 @@ describe('EmailService SMTP transport config', () => {
 
   it('creates the transport from SMTP_* env with port 587 / no TLS-on-connect by default', () => {
     new EmailService(makeConfig({ ...baseConfig, SMTP_HOST: 'smtp.x.dev' }));
-    expect(nodemailer.createTransport).toHaveBeenCalledWith({
-      host: 'smtp.x.dev',
-      port: 587,
-      secure: false,
-      auth: undefined,
-    });
+    expect(nodemailer.createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        host: 'smtp.x.dev',
+        port: 587,
+        secure: false,
+        requireTLS: false,
+        auth: undefined,
+        connectionTimeout: 10_000,
+      }),
+    );
   });
 
   it('uses implicit TLS on port 465 and passes auth when user/pass are set', () => {

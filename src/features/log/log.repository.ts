@@ -116,7 +116,9 @@ export class LogRepository {
         ),
       )
       .groupBy(requestLogs.method, normalizedPath)
-      .orderBy(desc(count()));
+      .orderBy(desc(count()))
+      // Unbounded when paths carry non-numeric unique segments (slugs, emails): cap the response.
+      .limit(200);
 
     return rows.map((r) => ({
       method: r.method ?? '—',

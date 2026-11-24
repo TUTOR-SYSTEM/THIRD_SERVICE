@@ -41,7 +41,7 @@ export const createNotificationSchema = z.object({
     .min(1, 'Title is required')
     .max(255, 'Title too long'),
   senderId: z.string().uuid('senderId must be uuid ...').optional().nullable(),
-  content: z.string({ message: 'Content must be string ...' }),
+  content: z.string({ message: 'Content must be string ...' }).max(5000, 'Content too long'),
   subContent: z.string({ message: 'subContent must be string ...' }).max(255).optional(),
   userId: z.string().uuid('userId must be uuid ...').optional().nullable(),
   classId: z.string().uuid('classId must be uuid ...').optional().nullable(),
@@ -53,16 +53,20 @@ export const createNotificationSchema = z.object({
     .optional(),
   actionLabel: z.string().max(100).optional(),
   actionType: notificationActionEnum.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  metadata: z
+    .record(z.string(), z.unknown())
+    .refine((m) => JSON.stringify(m).length <= 10_000, 'metadata too large')
+    .optional(),
 });
 
 export const getNotificationsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(100_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
   // An empty / blank search means "no search" (the UI often sends `search=`), not a 400.
   search: z
     .string()
     .trim()
+    .max(100)
     .optional()
     .transform((value) => (value ? value : undefined)),
   type: notificationTypeEnum.optional(),

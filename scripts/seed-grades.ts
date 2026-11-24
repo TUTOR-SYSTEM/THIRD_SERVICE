@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import 'dotenv/config';
+import './_guard-not-production';
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/postgres-js';
@@ -31,7 +32,11 @@ async function main(): Promise<void> {
   for (let level = 1; level <= 12; level++) {
     const name = `Lớp ${level}`;
 
-    const existing = await db.select({ id: grades.id }).from(grades).where(eq(grades.level, level)).limit(1);
+    const existing = await db
+      .select({ id: grades.id })
+      .from(grades)
+      .where(eq(grades.level, level))
+      .limit(1);
     if (existing.length > 0) {
       console.log(`Skipped (already exists): ${name}`);
       continue;

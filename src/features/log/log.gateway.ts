@@ -13,6 +13,7 @@ import { Server, Socket } from 'socket.io';
 import { DRIZZLE } from '../../database/database.module';
 import { resolveJwtAccessSecret } from '../../packages/configs/jwt-sign.config';
 import { requestLogs, users } from '../../database/schema';
+import { RedisService } from '../redis/redis.service';
 import { resolveCorsOrigins } from '../../packages/helpers/cors.helper';
 
 type RequestLogRow = typeof requestLogs.$inferSelect;
@@ -44,6 +45,7 @@ export class LogGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     @Inject(DRIZZLE) private readonly db: PostgresJsDatabase<Record<string, never>>,
+    private readonly redisService: RedisService,
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
@@ -65,15 +67,27 @@ export class LogGateway implements OnGatewayConnection, OnGatewayDisconnect {
         decoded === null ||
         (decoded as Record<string, unknown>).typ !== 'access' ||
         (decoded as Record<string, unknown>).role !== 'ADMIN' ||
-        typeof (decoded as Record<string, unknown>).sub !== 'string'
+        typeof (decoded as Record<string, unknown>).sub !== 'string' ||
+        typeof (decoded as Record<string, unknown>).sid !== 'string' ||
+        !(decoded as Record<string, string>).sid
       ) {
         client.disconnect();
         return;
       }
 
       const userId = (decoded as Record<string, string>).sub;
-      const user = await this.db.select().from(users).where(eq(users.id, userId)).limit(1);
-      if (user.length === 0) {
+      const sid = (decoded as Record<string, string>).sid;
+      // Same session check as JwtAuthGuard: a logged-out / password-changed session is refused.
+      if (!(await this.redisService.exists(`session:${userId}:${sid}`))) {
+        client.disconnect();
+        return;
+      }
+      const user = await this.db
+        .select({ id: users.id, isActive: users.isActive, role: users.role })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+      if (user.length === 0 || !user[0].isActive || user[0].role !== 'ADMIN') {
         client.disconnect();
         return;
       }

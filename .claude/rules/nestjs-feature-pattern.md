@@ -94,6 +94,11 @@ owner metadata; the gateway `authorized` flag does not grant delete). Clients mu
 responses (`notification.detail-url.ts`): the sender's `redirectUrl` if safe (internal path, or https host in
 `NOTIFICATION_REDIRECT_HOSTS`), else a per-type page.
 
+Upload hardening (2026-11-24): documents are checked by magic bytes (`matchesDocumentSignature`:
+pdf, PK-zip family, OLE2, mp4 `ftyp`, mp3, txt without NUL) in addition to the extension whitelist; sharp
+runs with `limitInputPixels: MAX_IMAGE_PIXELS` (40MP); a missing `originalname` is a 400. The per-user quota
+uses `RedisService.incrByWithWindow` (atomic Lua INCRBY+EXPIRE) — don't go back to separate incrby/expire.
+
 Upload gotcha: `UploadService.upload` always re-encodes images to JPEG via Sharp, so the stored
 key ends in `.jpg` and the returned `mimetype` is `image/jpeg` (not the original); non-images keep
 their original extension (`bin` if none).

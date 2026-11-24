@@ -13,10 +13,10 @@ describe('generateCode', () => {
     expect(generateCode(0)).toBe('');
   });
 
-  it('picks characters via Math.random (lowest and highest index)', () => {
+  it('uses only the allowed alphabet and is not driven by Math.random', () => {
     const spy = jest.spyOn(Math, 'random');
-    spy.mockReturnValueOnce(0).mockReturnValueOnce(0.999999);
-    expect(generateCode(2)).toBe('A9');
+    expect(generateCode(200)).toMatch(/^[A-Z0-9]{200}$/);
+    expect(spy).not.toHaveBeenCalled();
     spy.mockRestore();
   });
 });
