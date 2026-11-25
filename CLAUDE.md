@@ -233,7 +233,7 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `SMTP_PORT` / `SMTP_SECURE`               | Default `587` / `false` (`SMTP_SECURE` auto-true on 465) |
 | `SMTP_USER` / `SMTP_PASS`                 | Optional SMTP auth, but must be set together |
 | `MAIL_FROM`                               | Required — sender address for outgoing mail |
-| `PASSWORD_RESET_URL_BASE`                 | Base URL used in the verify-email link (the reset flow sends a code, no link) (default `http://localhost:3000`) |
+| `PASSWORD_RESET_URL_BASE`                 | Base URL used in the verify-email link and the login link of the account-created mail (the reset flow sends a code, no link) (default `http://localhost:3000`) |
 | `NOTIFICATION_REDIRECT_HOSTS`              | Comma-separated hosts allowed for absolute `https://` `redirectUrl` in notifications (internal `/path` always allowed); empty = only internal paths |
 | `CLOUDFLARE_R2_ENDPOINT` / `CLOUDFLARE_R2_ACCESS_KEY_ID` / `CLOUDFLARE_R2_SECRET_ACCESS_KEY` | Required — `UploadService` throws "R2 not configured" without them |
 | `CLOUDFLARE_R2_REGION`                    | Default `auto`                              |

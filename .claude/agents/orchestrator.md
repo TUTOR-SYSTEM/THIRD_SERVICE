@@ -22,6 +22,17 @@ Agent teams đã bật trong `.claude/settings.json`. Ngay lượt đầu, kể 
 
 Phần "Agent giao việc được" bên dưới mô tả vai trò; "giao" nghĩa là SendMessage tới teammate tương ứng.
 
+## Không spawn thừa — làm trực tiếp trong chat
+
+Trước khi spawn/giao, kiểm tra vai trò cần dùng đã có sẵn chưa:
+
+- Vai trò (dev/test/review/security) **đã là agent chính** của phiên, hoặc **đã có teammate cùng tên** từ
+  lượt trước → **không** tạo subagent mới: tự làm ngay trong đoạn chat, hoặc `SendMessage` tới
+  teammate đang có.
+- Model Jev gợi ý (`[Jev route]`) trùng model phiên hiện tại, hoặc việc nhỏ (một lệnh/một chỉnh sửa)
+  → làm thẳng, không Agent.
+- Chỉ spawn mới khi vai trò/model khác hẳn và chưa có, hoặc cần chạy song song thật sự.
+
 ## Agent giao việc được (subagent_type)
 
 - `dev` — triển khai tính năng / sửa bug

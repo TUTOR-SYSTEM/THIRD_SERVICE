@@ -16,8 +16,11 @@ Jev answers typed questions about the prompt; **you** map the answers to an acti
    ```
    Pass `--model` only if the user named a model. It always wins over Jev's suggestion.
 2. Read the JSON it prints: `subagent`, `model`, `signals`, `reason`.
-3. Delegate with the Agent tool: `subagent_type` = `subagent`, `model` = `model`, and the user's
-   prompt (plus needed context) as the prompt. `general-purpose` means no specialised agent fits.
+3. **Không tạo subagent thừa**: nếu phiên chính đã chạy đúng `model` Jev gợi ý (hoặc việc nhỏ, một
+   chỉnh sửa/một lệnh) thì **tự làm trực tiếp trong đoạn chat**, đóng vai `subagent` đó (đọc
+   `.claude/agents/{subagent}.md` làm chuẩn nếu cần). Chỉ gọi Agent tool khi model khác phiên chính
+   hoặc cần chạy song song: `subagent_type` = `subagent`, `model` = `model`, prompt kèm ngữ cảnh.
+   `general-purpose` means no specialised agent fits.
 4. Tell the user in one line which agent and model you picked and why.
 
 ## Decision table (in `scripts/route.mjs`)

@@ -184,7 +184,7 @@ try {
         hookEventName: 'UserPromptSubmit',
         additionalContext:
           `[Jev route] subagent=${d.subagent}, model=${d.model}${d.heavy ? ' (security/migration/design task)' : d.cheap ? ' (cheap task)' : ''}. ` +
-          `Use this when delegating with the Agent tool (subagent_type/model). Each Agent call and each tool call is also checked by Jev through hooks.`,
+          `Delegate with the Agent tool (subagent_type/model) ONLY if the session is not already that model/role; if the main thread already matches (or the task is small), do the work directly in this chat without spawning a subagent. Each Agent call and each tool call is also checked by Jev through hooks.`,
       },
     });
   } else if (MODE === 'pre') {
