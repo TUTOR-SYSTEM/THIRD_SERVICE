@@ -29,8 +29,10 @@ READONLY = {"status", "diff", "log", "show", "blame", "grep", "ls-files", "ls-tr
             "show-ref", "name-rev", "merge-base", "for-each-ref", "count-objects",
             "check-ignore", "fetch", "version", "help", "whatchanged", "diff-index",
             "diff-files", "range-diff", "ls-remote", "show-branch", "verify-commit"}
-ALWAYS_ASK = {"rebase", "merge", "cherry-pick", "revert", "pull", "am", "filter-branch",
-              "filter-repo", "prune", "rm", "send-email", "request-pull", "replace", "bisect"}
+ALWAYS_ASK = {"rebase", "am", "filter-branch",
+              "filter-repo", "prune", "rm", "send-email", "request-pull"}
+# Thao tác local/ít rủi ro, được mở (không hỏi). Không ghi lên GitHub; pull chỉ kéo về.
+OPEN_LOCAL = {"merge", "cherry-pick", "revert", "pull", "bisect", "replace"}
 GIT_OPTS_WITH_ARG = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"}
 SEPARATORS = set("();|&")
 
@@ -51,8 +53,6 @@ def classify(sub, args, allowed):
         if sub not in allowed:
             return "deny", (f"git {sub} bị chặn mặc định. Chỉ chạy khi bạn yêu cầu rõ trong prompt "
                             f"(vd: 'commit', 'push', 'git add').")
-        if sub == "commit" and has(args, "--amend"):
-            return "ask", "git commit --amend viết lại commit trước đó — cần xác nhận."
         if sub in ("commit", "push") and has(args, "--no-verify", "-n") and sub == "push" or \
            sub == "commit" and has(args, "--no-verify"):
             return "ask", f"git {sub} --no-verify bỏ qua hook — cần xác nhận."
@@ -61,6 +61,8 @@ def classify(sub, args, allowed):
             return "ask", "git push --force/--delete/--mirror ghi đè hoặc xoá trên remote — cần xác nhận."
         return None, ""
     if sub in READONLY:
+        return "allow", ""
+    if sub in OPEN_LOCAL:
         return "allow", ""
     if sub in ALWAYS_ASK:
         return "ask", f"git {sub} đổi lịch sử/working tree — cần xác nhận."
@@ -79,19 +81,19 @@ def classify(sub, args, allowed):
         if has(args, "--", "-f", "--force", "-B", "-C", "--discard-changes", ".") :
             return "ask", f"git {sub} có thể bỏ thay đổi chưa commit — cần xác nhận."
     elif sub == "branch":
-        if has(args, "-D", "-d", "--delete", "-M", "-m", "-f", "--force", "--move"):
+        if has(args, "-D", "-d", "--delete", "-f", "--force"):
             return "ask", "git branch xoá/đổi tên/ghi đè nhánh — cần xác nhận."
         safe = {"-a", "-r", "-v", "-vv", "--list", "-l", "--show-current", "--all", "--remotes"}
         if all(x in safe or x.startswith(("--merged", "--no-merged", "--contains", "--sort", "--format")) for x in args):
             return "allow", ""
     elif sub == "tag":
         if has(args, "-d", "--delete"):
-            return "ask", "git tag -d xoá tag — cần xác nhận."
+            return "allow", ""
         if not args or a0 in ("-l", "--list", "-n"):
             return "allow", ""
     elif sub == "stash":
         if a0 in ("drop", "clear"):
-            return "ask", f"git stash {a0} xoá stash — cần xác nhận."
+            return "allow", ""
         if a0 in ("list", "show"):
             return "allow", ""
     elif sub == "remote":
@@ -122,7 +124,7 @@ def classify(sub, args, allowed):
     elif sub == "submodule":
         if a0 in ("status", "summary"):
             return "allow", ""
-        return "ask", "git submodule đổi submodule — cần xác nhận."
+        return "allow", ""
     return None, ""
 
 def analyze(cmd, allowed, depth=0):
