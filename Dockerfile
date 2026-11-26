@@ -27,6 +27,12 @@ ENV NODE_ENV=production \
 COPY --chown=node:node --from=prod-deps /app/node_modules ./node_modules
 COPY --chown=node:node --from=builder /app/dist ./dist
 COPY package.json tsconfig.json ./
+# Git commit this image was built from (passed as build arg by compose). Shown via
+# `docker inspect` label and `GIT_COMMIT` env. Kept last so it doesn't bust earlier layers.
+ARG GIT_COMMIT=unknown
+ENV GIT_COMMIT=${GIT_COMMIT}
+LABEL org.opencontainers.image.revision=${GIT_COMMIT}
+
 USER node
 EXPOSE 4002
 CMD ["node", "dist/main"]
