@@ -29,13 +29,6 @@ async function bootstrap() {
   if (!rpcActorSecret) {
     throw new Error('RPC_ACTOR_SECRET must be set (shared with gateway and tutor)');
   }
-  // Required in every environment (no guest/guest fallback): set it in .env.
-  // RABBITMQ_URL, or RABBITMQ_HOST (+ PORT/USER/PASSWORD/VHOST) assembled by the helper.
-  const rabbitMqUrl = resolveRabbitMqUrl();
-  if (!rabbitMqUrl) {
-    throw new Error('RABBITMQ_URL or RABBITMQ_HOST is required');
-  }
-
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     logger: ['error', 'warn', 'log', 'debug', 'verbose'],
   });
