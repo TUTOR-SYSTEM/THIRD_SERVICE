@@ -10,14 +10,11 @@
  *   TEST_TOKEN_PARENT access token of a PARENT user (optional; enables the role 403 case)
  *   RUN_QUOTA=1       also run the per-minute quota case (sends 31 uploads; off by default)
  *   REPORT_PATH       optional file path to also write the markdown report to
- *   SAVE_RESULTS=1    store PASS/FAIL cases in Postgres (test_scenarios + test_runs, service = 'third').
- *                     Uses POSTGRES_HOST/PORT/DB/USER/PASSWORD from .env. SKIP cases are not stored.
  *
  * Only objects created by this script are touched. Every created key is deleted at the end.
  * Exit code 1 when any case fails, so it can be used in CI.
  */
 import sharp from 'sharp';
-import postgres from 'postgres';
 
 const BASE = (process.env.UPLOAD_BASE_URL ?? 'http://localhost:4002').replace(/\/+$/, '');
 const TOKEN_A = process.env.TEST_TOKEN_A ?? '';
@@ -194,7 +191,6 @@ async function main() {
     });
   }
 
-  if (process.env.SAVE_RESULTS === '1') await persistResults();
   report();
 }
 
@@ -460,67 +456,6 @@ async function runOwnership(png: Buffer) {
     token: TOKEN_B,
   });
   expectStatus('O-01', 'GET /upload/download', 'other user cannot download -> 403', r, 403);
-}
-
-const CATEGORY_BY_STATUS = (status: number): string => {
-  if (status >= 200 && status < 300) return 'valid';
-  if (status === 401 || status === 403) return 'auth';
-  if (status === 400 || status === 413) return 'validation';
-  if (status === 404) return 'not_found';
-  return 'domain';
-};
-
-async function persistResults(): Promise<void> {
-  const sql = postgres({
-    host: process.env.POSTGRES_HOST,
-    port: Number(process.env.POSTGRES_PORT ?? 5432),
-    database: process.env.POSTGRES_DB,
-    username: process.env.POSTGRES_USER,
-    password: process.env.POSTGRES_PASSWORD,
-    max: 1,
-  });
-  const correlationId = `uploads-e2e-${crypto.randomUUID()}`;
-  let saved = 0;
-  try {
-    for (const r of results) {
-      if (r.status === 'SKIP') continue;
-      const [method, ...rest] = r.route.split(' ');
-      const path = rest.join(' ');
-      // expected is e.g. "400", "400 or 413", "201 + body": keep the first HTTP status code.
-      const expectedStatus = Number(r.expected.match(/\d{3}/)?.[0]);
-      const actualStatus = Number(r.actual);
-      const hasActual = Number.isFinite(actualStatus);
-      const passed = r.status === 'PASS';
-      const name = `${r.id} ${r.name}`.slice(0, 200);
-      const authProfile = r.id.startsWith('U-') ? 'none' : 'caller';
-      const category = CATEGORY_BY_STATUS(expectedStatus);
-
-      let scenario = await sql<{ id: string }[]>`
-        select id from test_scenarios
-        where service = 'third' and method = ${method} and path = ${path} and name = ${name}
-        limit 1`;
-      if (scenario.length === 0) {
-        scenario = await sql<{ id: string }[]>`
-          insert into test_scenarios
-            (service, method, path, name, description, expected_status, category, auth_profile)
-          values ('third', ${method}, ${path}, ${name}, ${r.note ?? null}, ${expectedStatus},
-            ${category}::test_scenario_category, ${authProfile}::test_auth_profile)
-          returning id`;
-      }
-
-      await sql`
-        insert into test_runs
-          (scenario_id, correlation_id, actual_status, expected_status, passed, duration_ms,
-           error_message, request_path)
-        values (${scenario[0].id}, ${correlationId}, ${hasActual ? actualStatus : null},
-          ${expectedStatus}, ${passed}, ${Math.round(r.ms)}, ${passed ? null : (r.note ?? r.actual)},
-          ${path})`;
-      saved++;
-    }
-    console.log(`\nSaved ${saved} runs to test_runs (correlation_id=${correlationId})`);
-  } finally {
-    await sql.end();
-  }
 }
 
 function report() {

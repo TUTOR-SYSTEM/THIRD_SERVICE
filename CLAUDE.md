@@ -131,23 +131,6 @@ src/
 │   │   └── upload.module.ts
 │   ├── redis/                    # Redis service wrapper (ioredis); also has redis.rpc.controller.ts
 │   │                              # (@MessagePattern('redis.*') mirror)
-│   ├── test-scenario/            # Admin-managed test cases per gateway endpoint + the engine that
-│   │                              # runs them: `testscenario.create|list|update|delete|stats|run|runs|authprofiles|fixtures.*`
-│   │                              # (`test-scenario.rpc.controller.ts` only — no HTTP controller;
-│   │                              # gateway's thin `/test-scenarios` proxy reaches it). `run` fires a
-│   │                              # REAL request at `GATEWAY_BASE_URL` with a fresh `x-correlation-id`
-│   │                              # (so it lands in `request_logs` like organic traffic) and records
-│   │                              # a `test_runs` row (pass ⇔ actualStatus === expectedStatus).
-│   │                              # `wait: false` (gateway `?async=true`) returns `{ correlationId }`
-│   │                              # at once and records the run in the background. Tables
-│   │                              # `test_scenarios`/`test_runs`/`test_fixtures` live in gateway's
-│   │                              # `schema.ts`. Before firing, `buildRequest` fills `{{variables}}`
-│   │                              # (test-template.ts): `accessToken` (the scenario's `authProfile`
-│   │                              # token), `token.<role>`, `fixture.<key>` (test-fixture.service.ts,
-│   │                              # fixed value or resolved via a gateway GET + dot path, cached on
-│   │                              # the row), `uuid`/`unknownUuid`/`timestamp`/`random.*`. Role
-│   │                              # tokens come from test-auth.service.ts (`TEST_ACCOUNT_<ROLE>`).
-│   │                              # A variable that can't be filled = failed run, nothing sent.
 │   └── log/                      # Owns `request_logs` (centralized cross-service request logging —
 │                                  # see gateway's `LogController` for the admin-facing read API).
 │                                  # log.controller.ts (HTTP, ADMIN only) + log.rpc.controller.ts
@@ -175,10 +158,8 @@ src/
     └── pipes/                      # ZodValidationPipe
 
 drizzle/                          # Generated SQL migrations (5 so far) — see database.md
-scripts/seed-test-scenarios.ts    # Idempotent seed of `test_scenarios` (key endpoints, 3-6 cases each)
 test/
-├── jest-e2e.json
-└── test-scenario.e2e-spec.ts     # `testscenario.run` against a local fake-gateway HTTP server
+└── jest-e2e.json
 ```
 
 ## Code Conventions
@@ -227,11 +208,11 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `ENABLE_SWAGGER`                         | `true` exposes `/api-docs` outside development/test (default: off, even when `NODE_ENV` is unset) |
 | `RABBITMQ_URL`                            | RabbitMQ connection — required at boot (local `amqp://admin:admin@localhost:5672`; Railway: RabbitMQ service private URL) |
 | `THIRD_QUEUE`                             | Overrides the RMQ listener queue name (default `third_queue`) |
-| `GATEWAY_BASE_URL`                        | Where `testscenario.run` fires its real requests (default `http://localhost:8888`) |
-| `TEST_ACCOUNT_ADMIN` / `TEST_ACCOUNT_TUTOR` / `TEST_ACCOUNT_STUDENT` / `TEST_ACCOUNT_PARENT` | `email:password` of the per-role test accounts a scenario's `authProfile` runs as (logged in through the gateway, tokens cached in memory). Unset → runs with that profile fail with "not configured". `scripts/seed-user.ts` creates one account per role locally |
 | `SMTP_HOST`                               | Required — SMTP server host; `EmailService` throws at construction if missing |
 | `SMTP_PORT` / `SMTP_SECURE`               | Default `587` / `false` (`SMTP_SECURE` auto-true on 465) |
 | `SMTP_USER` / `SMTP_PASS`                 | Optional SMTP auth, but must be set together |
+| `SMTP_REQUIRE_TLS`                        | STARTTLS is required unless set to `false` (local relays without TLS) |
+| `RPC_ACTOR_SECRET`                        | HMAC key for RPC identity seal and `rpcSig` (signed `email.*`, `log.query|trace|stats`, sensitive `redis.*`). Must match gateway/user |
 | `MAIL_FROM`                               | Required — sender address for outgoing mail |
 | `PASSWORD_RESET_URL_BASE`                 | Base URL used in the verify-email link and the login link of the account-created mail (the reset flow sends a code, no link) (default `http://localhost:3000`) |
 | `NOTIFICATION_REDIRECT_HOSTS`              | Comma-separated hosts allowed for absolute `https://` `redirectUrl` in notifications (internal `/path` always allowed); empty = only internal paths |
@@ -268,7 +249,7 @@ Cross-service rules (RPC contract, shared conventions baseline) live one level u
 
 Configured in `.claude/settings.json` (scripts in `.claude/hooks/`):
 
-- **PreToolUse (Write|Edit)** → `guard-paths.mjs` blocks edits to `.env*` and generated
+- **PreToolUse (Write|Edit)** → `guard-paths.mjs` asks before editing generated
   `drizzle/**` files.
 - **PostToolUse (Write|Edit)** → `format-ts.mjs` runs prettier + eslint `--fix` on the
   touched `.ts/.js` file.

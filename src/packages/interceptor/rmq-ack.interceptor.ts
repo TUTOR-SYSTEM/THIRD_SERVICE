@@ -13,11 +13,13 @@ interface AckableChannel {
  * `main.ts` consumes with `noAck: false`. Nest's RMQ server never acks a successful handler on its
  * own (it only nacks unhandled patterns), so this interceptor owns the ack:
  * - handler completed (RPC reply emitted, or event handled) → `ack`, after the reply is published;
- * - handler threw → `nack(requeue=false)`: the message is dropped rather than redelivered in a
- *   tight loop (there is no DLX configured yet), and the error still goes to the RPC caller.
+ * - handler threw → `nack(requeue=false)`: the message is not redelivered in a tight loop. The
+ *   broker dead-letters it to the DLQ (see rmq-dead-letter.helper.ts) once the broker policy is set.
+ *   The rejection is logged (pattern + error name only, no payload) and the error still goes to the
+ *   RPC caller.
  *
  * Consequence: a process crash between delivery and ack redelivers the message (at-least-once), so
- * side-effecting handlers (email, upload, log.create) can run twice. Every ack/nack is attempted
+ * side-effecting handlers (email, upload) can run twice. Every ack/nack is attempted
  * exactly once; a failure to ack is logged, never thrown into the handler.
  */
 @Injectable()
@@ -40,6 +42,9 @@ export class RmqAckInterceptor implements NestInterceptor {
       }),
       catchError((err: unknown) => {
         this.safe(() => channel.nack(message, false, false), 'nack', pattern);
+        this.logger.warn(
+          `Rejected message for "${pattern}" sent to DLQ: ${(err as Error)?.name ?? 'Error'}`,
+        );
         return throwError(() => err);
       }),
     );

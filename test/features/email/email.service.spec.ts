@@ -102,17 +102,31 @@ describe('EmailService SMTP transport config', () => {
 
   beforeEach(() => nodemailer.createTransport.mockClear());
 
-  it('creates the transport from SMTP_* env with port 587 / no TLS-on-connect by default', () => {
+  it('creates the transport from SMTP_* env with port 587; STARTTLS is required by default', () => {
     new EmailService(makeConfig({ ...baseConfig, SMTP_HOST: 'smtp.x.dev' }));
     expect(nodemailer.createTransport).toHaveBeenCalledWith(
       expect.objectContaining({
         host: 'smtp.x.dev',
         port: 587,
         secure: false,
-        requireTLS: false,
+        requireTLS: true,
         auth: undefined,
         connectionTimeout: 10_000,
       }),
+    );
+  });
+
+  it('SMTP_REQUIRE_TLS=false lets a local relay without STARTTLS be used', () => {
+    const prev = process.env.SMTP_REQUIRE_TLS;
+    process.env.SMTP_REQUIRE_TLS = 'false';
+    try {
+      new EmailService(makeConfig({ ...baseConfig, SMTP_HOST: 'localhost' }));
+    } finally {
+      if (prev === undefined) delete process.env.SMTP_REQUIRE_TLS;
+      else process.env.SMTP_REQUIRE_TLS = prev;
+    }
+    expect(nodemailer.createTransport).toHaveBeenCalledWith(
+      expect.objectContaining({ requireTLS: false }),
     );
   });
 

@@ -47,6 +47,27 @@ import type {
   UploadResponse,
 } from './upload.interface';
 
+/** Max image decodes running at once across all requests (report F-12). */
+const SHARP_MAX_CONCURRENCY = 4;
+let sharpActive = 0;
+const sharpWaiters: Array<() => void> = [];
+
+async function withSharpSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (sharpActive >= SHARP_MAX_CONCURRENCY) {
+    // The slot is handed over to the next waiter, so the count never exceeds the limit.
+    await new Promise<void>((resolve) => sharpWaiters.push(resolve));
+  } else {
+    sharpActive++;
+  }
+  try {
+    return await task();
+  } finally {
+    const next = sharpWaiters.shift();
+    if (next) next();
+    else sharpActive--;
+  }
+}
+
 @Injectable()
 export class UploadService implements OnModuleInit {
   private readonly logger = new Logger(UploadService.name);
@@ -168,11 +189,13 @@ export class UploadService implements OnModuleInit {
     if (isImage) {
       try {
         // Pixel cap guards against decompression bombs (a small file that decodes to GBs of RAM).
-        processedBuffer = await sharp(file.buffer, { limitInputPixels: MAX_IMAGE_PIXELS })
-          .rotate()
-          .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80, mozjpeg: true })
-          .toBuffer();
+        processedBuffer = await withSharpSlot(() =>
+          sharp(file.buffer, { limitInputPixels: MAX_IMAGE_PIXELS })
+            .rotate()
+            .resize(1920, 1920, { fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 80, mozjpeg: true })
+            .toBuffer(),
+        );
       } catch (err) {
         this.logger.warn(`Image decode failed: ${(err as Error).message}`);
         throw new BadRequestException('Invalid image file');

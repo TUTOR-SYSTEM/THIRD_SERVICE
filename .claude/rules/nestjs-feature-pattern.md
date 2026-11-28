@@ -73,6 +73,7 @@ See `RedisRpcController` (`src/features/redis/redis.rpc.controller.ts`): plain
 `RpcExceptionFilter` and `TraceContextInterceptor` are applied globally to the RMQ microservice
 in `main.ts` (not per-controller). No registry to update — a new handler is live as soon as it
 exists, reachable once the caller's `RmqProducer` routes its prefix to `third_queue`.
+- Do not change `third_queue`'s queue arguments. gateway, user and tutor declare it with `{ durable: true }` as clients, so any argument added on third's side makes their connections fail with PRECONDITION_FAILED. The dead-letter route is a broker policy, set once (`src/packages/helpers/rmq-dead-letter.helper.ts` prints the command). third declares the DLX and DLQ itself at boot.
 - Anything a caller invokes with `.send()` must be a `@MessagePattern` that returns a
   non-undefined value (a void/`@EventPattern` handler gives an empty reply and the caller's
   `send()` fails). Use `@EventPattern` only for `.emit()` targets.

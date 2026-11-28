@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // PreToolUse hook (Write|Edit): ask before editing protected files.
-//   - .env / .env.* / *.env (e.g. docker.env) — hold secrets; Claude asks before editing them.
+//   - .env files are NOT guarded: editing them is allowed without a prompt (user decision, 2026-11-28).
 // (drizzle/ migrations moved to the gateway repo — 2026-09-28 schema consolidation — so that
 // half of the rule no longer applies here.)
 // Emits a PreToolUse permission decision ("ask") as JSON; otherwise stays silent and allows the edit.
@@ -17,12 +17,7 @@ process.stdin.on('end', () => {
   const file = data?.tool_input?.file_path || '';
   const norm = file.replace(/\\/g, '/');
 
-  const rules = [
-    {
-      re: /(^|\/)(\.env(\.[^/]+)?|[^/]*\.env)$/,
-      why: 'env files hold secrets — confirm before Claude edits them.',
-    },
-  ];
+  const rules = [];
 
   for (const rule of rules) {
     if (rule.re.test(norm)) {

@@ -1,6 +1,10 @@
 import { BadRequestException, Controller, NotFoundException } from '@nestjs/common';
 import { EventPattern, MessagePattern, Payload } from '@nestjs/microservices';
 import { z } from 'zod';
+import {
+  REDIS_MAX_KEYS_PER_CALL,
+  REDIS_WINDOW_MAX_SECONDS,
+} from '@packages/helpers/redis-keys.policy';
 import { DELETABLE_PREFIX_PATTERN, RedisService } from './redis.service';
 
 /** Key families that hold sessions / refresh hashes / reset tokens: must always carry a TTL. */
@@ -24,7 +28,8 @@ const incrSchema = z.object({
   windowSeconds: z
     .number({ message: 'windowSeconds must be a positive integer' })
     .int('windowSeconds must be a positive integer')
-    .positive('windowSeconds must be a positive integer'),
+    .positive('windowSeconds must be a positive integer')
+    .max(REDIS_WINDOW_MAX_SECONDS, 'windowSeconds is larger than the 1-day limit'),
 });
 
 /**
@@ -114,6 +119,9 @@ export class RedisRpcController {
   del(@Payload() payload: { keys: string[] }) {
     if (!Array.isArray(payload?.keys) || payload.keys.some((k) => typeof k !== 'string' || !k)) {
       throw new BadRequestException('keys must be an array of non-empty strings');
+    }
+    if (payload.keys.length > REDIS_MAX_KEYS_PER_CALL) {
+      throw new BadRequestException('too many keys in one call');
     }
     return this.redisService.del(...payload.keys);
   }

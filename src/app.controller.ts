@@ -31,13 +31,9 @@ export class AppController {
     this.logger.log('[HEALTH] Checking Redis connection');
     try {
       const client = this.redisService.client;
-      const [pong, info, dbsize] = await Promise.all([
-        client.ping(),
-        client.info('memory'),
-        client.dbsize(),
-      ]);
+      const pong = await client.ping();
 
-      // Never return key names or values — counts and memory info only.
+      // Liveness only: no key counts, memory info or key names for RPC publishers.
       return {
         status: 'healthy',
         cache: 'Redis',
@@ -45,10 +41,6 @@ export class AppController {
         timestamp: new Date().toISOString(),
         message: 'Redis connection is healthy',
         ping: pong,
-        stats: {
-          totalKeys: dbsize,
-          info: info.split('\r\n').slice(0, 5).join(', '),
-        },
       };
     } catch (error) {
       this.logger.error(`[HEALTH] Redis connection failed: ${error}`);

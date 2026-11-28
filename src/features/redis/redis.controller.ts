@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -21,18 +22,13 @@ import {
 import { AdminRoleGuard } from '@packages/guards';
 import { ZodValidationPipe } from '@packages/pipes';
 import { z } from 'zod';
+import {
+  isSensitiveRedisKey,
+  REDIS_MAX_KEYS_PER_CALL,
+  REDIS_TTL_MAX_SECONDS,
+  REDIS_WINDOW_MAX_SECONDS,
+} from '@packages/helpers/redis-keys.policy';
 import { DELETABLE_PREFIX_PATTERN, RedisService } from './redis.service';
-
-/** Key prefixes holding sessions / refresh / reset tokens — never reachable over HTTP. */
-const SENSITIVE_KEY_PREFIXES = [
-  'session:',
-  'login-session:',
-  'reset-password:',
-  // Password-reset code hashes and their attempt counters (no colon: covers both key shapes).
-  'reset-password-otp',
-  'refresh:',
-  'refresh-token:',
-];
 
 const keySchema = z.object({
   key: z.string({ message: 'key is required' }).min(1, 'key is required').max(256),
@@ -45,13 +41,15 @@ const setSchema = z.object({
     .number({ message: 'ttlSeconds must be a positive integer' })
     .int('ttlSeconds must be a positive integer')
     .positive('ttlSeconds must be a positive integer')
+    .max(REDIS_TTL_MAX_SECONDS, 'ttlSeconds is larger than the 30-day limit')
     .optional(),
 });
 
 const delSchema = z.object({
   keys: z
     .array(z.string().min(1, 'keys must be non-empty strings'), { message: 'keys is required' })
-    .min(1, 'keys is required'),
+    .min(1, 'keys is required')
+    .max(REDIS_MAX_KEYS_PER_CALL, 'too many keys in one call'),
 });
 
 const delByPrefixSchema = z.object({
@@ -65,7 +63,8 @@ const incrSchema = z.object({
   windowSeconds: z
     .number({ message: 'windowSeconds must be a positive integer' })
     .int('windowSeconds must be a positive integer')
-    .positive('windowSeconds must be a positive integer'),
+    .positive('windowSeconds must be a positive integer')
+    .max(REDIS_WINDOW_MAX_SECONDS, 'windowSeconds is larger than the 1-day limit'),
 });
 
 type KeyDto = z.infer<typeof keySchema>;
@@ -93,7 +92,10 @@ export class RedisController {
   @SwaggerResponse({ status: 200, description: 'Value retrieved (null if key does not exist)' })
   @SwaggerResponse({ status: 403, description: 'Sensitive key family' })
   async get(@Query('key') key: string): Promise<string | null> {
-    this.assertNotSensitive([key ?? '']);
+    if (typeof key !== 'string' || key.length === 0 || key.length > 256) {
+      throw new BadRequestException('key is required (max 256 characters, a single value)');
+    }
+    this.assertNotSensitive([key]);
     return this.redisService.get(key);
   }
 
@@ -225,11 +227,8 @@ export class RedisController {
   }
 
   private assertNotSensitive(keys: string[]): void {
-    for (const key of keys) {
-      const lowered = key.toLowerCase();
-      if (SENSITIVE_KEY_PREFIXES.some((prefix) => lowered.startsWith(prefix))) {
-        throw new ForbiddenException('Access to this Redis key is not allowed');
-      }
+    if (keys.some((key) => isSensitiveRedisKey(key))) {
+      throw new ForbiddenException('Access to this Redis key is not allowed');
     }
   }
 }

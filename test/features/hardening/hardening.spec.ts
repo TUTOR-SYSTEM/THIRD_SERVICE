@@ -1,5 +1,4 @@
 import { BadRequestException } from '@nestjs/common';
-import { LogRpcController } from 'src/features/log/log.rpc.controller';
 import { RedisRpcController } from 'src/features/redis/redis.rpc.controller';
 import { UploadRpcController } from 'src/features/uploads/upload.rpc.controller';
 import { UploadService } from 'src/features/uploads/upload.service';
@@ -8,34 +7,6 @@ import { UploadService } from 'src/features/uploads/upload.service';
 jest.mock('uuid', () => ({ v4: () => 'test-uuid' }));
 
 describe('security hardening (review round)', () => {
-  describe('log.create RPC validation', () => {
-    it('drops an invalid payload without persisting it', () => {
-      const logService = { createInternal: jest.fn() };
-      const controller = new LogRpcController(logService as never);
-
-      controller.create({ serviceName: 'x' });
-
-      expect(logService.createInternal).not.toHaveBeenCalled();
-    });
-
-    it('persists a valid payload', () => {
-      const logService = { createInternal: jest.fn().mockResolvedValue(undefined) };
-      const controller = new LogRpcController(logService as never);
-      const dto = {
-        serviceName: 'gateway',
-        type: 'HTTP',
-        path: '/x',
-        durationMs: 3,
-        correlationId: 'c1',
-        traceId: 't1',
-      };
-
-      controller.create(dto);
-
-      expect(logService.createInternal).toHaveBeenCalledWith(expect.objectContaining(dto));
-    });
-  });
-
   describe('redis RPC with an empty payload', () => {
     const redis = { get: jest.fn(), exists: jest.fn(), set: jest.fn() };
     const controller = new RedisRpcController(redis as never);

@@ -57,6 +57,9 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
+# local Claude Code settings (may hold secrets; already tracked, see report F-16)
+.claude/settings.local.json
+
 # docker compose env (real secrets)
 docker.env
 

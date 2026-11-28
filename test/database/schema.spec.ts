@@ -1,11 +1,5 @@
 import { getTableConfig } from 'drizzle-orm/pg-core';
-import {
-  attendances,
-  conversationParticipants,
-  messages,
-  requestLogs,
-  testRuns,
-} from 'src/database/schema';
+import { attendances, conversationParticipants, messages, requestLogs } from 'src/database/schema';
 
 /** Index names declared in each table's extra-config callback. */
 const indexNames = (table: Parameters<typeof getTableConfig>[0]) =>
@@ -28,13 +22,6 @@ describe('schema indexes', () => {
     expect(indexNames(requestLogs)).toEqual([
       'request_logs_correlation_id_idx',
       'request_logs_service_name_created_at_idx',
-    ]);
-  });
-
-  it('declares the scenario history and correlation indexes on test_runs', () => {
-    expect(indexNames(testRuns)).toEqual([
-      'test_runs_scenario_id_created_at_idx',
-      'test_runs_correlation_id_idx',
     ]);
   });
 });
