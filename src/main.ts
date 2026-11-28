@@ -17,6 +17,7 @@ import { HttpExceptionFilter, RpcExceptionFilter } from '@packages/filters';
 import { RmqAckInterceptor, TraceContextInterceptor } from '@packages/interceptor';
 import { RpcIdentityInterceptor } from '@packages/interceptor/rpc-identity.interceptor';
 import { RpcSignatureInterceptor } from '@packages/interceptor/rpc-signature.interceptor';
+import { resolveRabbitMqUrl } from '@packages/helpers/rmq-url.helper';
 import {
   assertDeadLetterTopology,
   deadLetterPolicyCommand,
@@ -29,9 +30,10 @@ async function bootstrap() {
     throw new Error('RPC_ACTOR_SECRET must be set (shared with gateway and tutor)');
   }
   // Required in every environment (no guest/guest fallback): set it in .env.
-  const rabbitMqUrl = process.env.RABBITMQ_URL?.trim();
+  // RABBITMQ_URL, or RABBITMQ_HOST (+ PORT/USER/PASSWORD/VHOST) assembled by the helper.
+  const rabbitMqUrl = resolveRabbitMqUrl();
   if (!rabbitMqUrl) {
-    throw new Error('RABBITMQ_URL is required');
+    throw new Error('RABBITMQ_URL or RABBITMQ_HOST is required');
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {

@@ -206,7 +206,7 @@ with `send()` must return a non-undefined value. See `../.claude/rules/architect
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` / `JWT_ACCESS_EXPIRES_SECONDS` / `JWT_REFRESH_EXPIRES_SECONDS` | Read by shared `@packages` auth code, must match `user`'s |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` / `REDIS_URL`                                              | Redis connection |
 | `ENABLE_SWAGGER`                         | `true` exposes `/api-docs` outside development/test (default: off, even when `NODE_ENV` is unset) |
-| `RABBITMQ_URL`                            | RabbitMQ connection — required at boot (local `amqp://admin:admin@localhost:5672`; Railway: RabbitMQ service private URL) |
+| `RABBITMQ_URL`                | RabbitMQ connection URL (local `amqp://admin:admin@localhost:5672`; Railway: RabbitMQ service private URL). Optional if `RABBITMQ_HOST` is set: then built from `RABBITMQ_HOST`, `RABBITMQ_PORT` (5672), `RABBITMQ_USER`/`RABBITMQ_DEFAULT_USER`, `RABBITMQ_PASSWORD`/`RABBITMQ_DEFAULT_PASS`, `RABBITMQ_VHOST` (`/`), `RABBITMQ_TLS=true` (amqps) |
 | `THIRD_QUEUE`                             | Overrides the RMQ listener queue name (default `third_queue`) |
 | `SMTP_HOST`                               | Required — SMTP server host; `EmailService` throws at construction if missing |
 | `SMTP_PORT` / `SMTP_SECURE`               | Default `587` / `false` (`SMTP_SECURE` auto-true on 465) |

@@ -37,6 +37,7 @@ or different in third-service.
   after 5s; `TokenBucketGuard` fails open (and keys by route pattern) when Redis is down.
 - **JwtAuthGuard also checks the DB role** (2026-11-24): after the Redis session check it loads
   `isActive` + `role` and rejects (401) a token whose `role` differs from the user row.
+- **RabbitMQ URL** (2026-11-28): `resolveRabbitMqUrl()` (`@packages/helpers/rmq-url.helper`) uses `RABBITMQ_URL`, else builds one from `RABBITMQ_HOST`/`PORT`/`USER`|`DEFAULT_USER`/`PASSWORD`|`DEFAULT_PASS`/`VHOST`/`TLS`. Same helper (`rabbitmq/rmq-url.ts`) lives in gateway, user, tutor, user-tutor-link; keep the copies identical.
 - **Swagger is opt-in**: only when `NODE_ENV` is development/test or `ENABLE_SWAGGER=true` (unset
   `NODE_ENV` no longer exposes `/api-docs`). `main.ts` calls `app.enableShutdownHooks()`.
 - **No raw error text to HTTP clients**: `ErrorInterceptor` always answers non-HTTP, non-constraint errors with
