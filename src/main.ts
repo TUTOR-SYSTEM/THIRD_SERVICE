@@ -12,13 +12,22 @@ import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from '@packages/interceptor/response.interceptor';
-import { ErrorInterceptor, LoggerInterceptor } from '@packages/interceptor';
+import { ErrorInterceptor } from '@packages/interceptor';
 import { HttpExceptionFilter, RpcExceptionFilter } from '@packages/filters';
 import { RmqAckInterceptor, TraceContextInterceptor } from '@packages/interceptor';
-import { setLogSink } from '@packages/context/log-sink';
-import { LogService } from './features/log/log.service';
+import { RpcIdentityInterceptor } from '@packages/interceptor/rpc-identity.interceptor';
+import { RpcSignatureInterceptor } from '@packages/interceptor/rpc-signature.interceptor';
+import {
+  assertDeadLetterTopology,
+  deadLetterPolicyCommand,
+} from '@packages/helpers/rmq-dead-letter.helper';
 
 async function bootstrap() {
+  // third-service verifies the user identity gateway/tutor seal on RPC: the secret is required.
+  const rpcActorSecret = process.env.RPC_ACTOR_SECRET?.trim();
+  if (!rpcActorSecret) {
+    throw new Error('RPC_ACTOR_SECRET must be set (shared with gateway and tutor)');
+  }
   // Required in every environment (no guest/guest fallback): set it in .env.
   const rabbitMqUrl = process.env.RABBITMQ_URL?.trim();
   if (!rabbitMqUrl) {
@@ -43,13 +52,8 @@ async function bootstrap() {
 
   app.enableCors({ origin: resolveCorsOrigins(), credentials: true });
   app.useGlobalInterceptors(new ResponseInterceptor(app.get(Reflector)));
-  app.useGlobalInterceptors(new ErrorInterceptor(), new LoggerInterceptor());
+  app.useGlobalInterceptors(new ErrorInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
-
-  // Own the `request_logs` table locally — write directly instead of round-tripping through
-  // RabbitMQ to itself. `TraceContextInterceptor` calls `emitRequestLog()` for every RPC hop.
-  const logService = app.get(LogService);
-  setLogSink((entry) => logService.createInternal(entry));
 
   // `deferInitialization: true` is required: by default `connectMicroservice()` synchronously
   // calls `registerListeners()` before returning, which binds every @MessagePattern handler to
@@ -59,6 +63,15 @@ async function bootstrap() {
   // fallback keeps handling errors instead). Deferring means listener registration happens
   // inside `startAllMicroservices()` → `listen()`, after our filter is already in place.
   //
+  // Dead-letter exchange and DLQ for rejected messages (report F-14). Declared before the listener
+  // starts; the policy that routes `third_queue` to it is set once on the broker (see helper).
+  const workQueue = process.env.THIRD_QUEUE ?? 'third_queue';
+  const dlq = await assertDeadLetterTopology(rabbitMqUrl, workQueue);
+  Logger.log(
+    `DLQ ready: ${dlq.queue} (exchange ${dlq.exchange}). Policy needed on the broker: ${deadLetterPolicyCommand(workQueue)}`,
+    'Bootstrap',
+  );
+
   const rmqMicroservice = app.connectMicroservice<MicroserviceOptions>(
     {
       transport: Transport.RMQ,
@@ -82,7 +95,12 @@ async function bootstrap() {
   // Opens the correlationId/traceId/serviceName RequestContext for every @MessagePattern
   // handler — see [[rmq-rpc-plumbing]] memory.
   // Ack interceptor is outermost so it also sees failures raised by TraceContextInterceptor.
-  rmqMicroservice.useGlobalInterceptors(new RmqAckInterceptor(), new TraceContextInterceptor());
+  rmqMicroservice.useGlobalInterceptors(
+    new RmqAckInterceptor(),
+    new RpcIdentityInterceptor(rpcActorSecret),
+    new RpcSignatureInterceptor(rpcActorSecret),
+    new TraceContextInterceptor(),
+  );
 
   // Opt-in: Swagger only in development/test or when ENABLE_SWAGGER=true (unset NODE_ENV is not enough).
   const swaggerEnabled =
@@ -127,7 +145,7 @@ async function bootstrap() {
     'Bootstrap',
   );
 
-  const port = process.env.PORT ?? 8888;
+  const port = process.env.PORT ?? '4003';
   await app.listen(port);
   Logger.log(`[THIRD] listening on port ${port}`, 'Bootstrap');
 }

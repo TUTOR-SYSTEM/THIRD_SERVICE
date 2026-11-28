@@ -5,7 +5,6 @@ import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './features/redis/redis.module';
 import { NotificationModule } from './features/notification/notification.module';
-import { LogModule } from './features/log/log.module';
 import { JwtAuthGuard, LanguageGuard, TokenBucketGuard } from './packages/guards';
 import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
@@ -21,7 +20,6 @@ import { EmailModule } from './features/email/email.module';
     EmailModule,
     RedisModule,
     NotificationModule,
-    LogModule,
     UploadModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET,

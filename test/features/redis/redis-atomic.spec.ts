@@ -54,7 +54,7 @@ describe('RedisService atomic helpers', () => {
   it.each([0, -1, 1.5, Number.NaN])('incrWithWindow rejects window %p', async (windowSeconds) => {
     const spy = jest.spyOn(service.client, 'eval');
 
-    await expect(service.incrWithWindow('k', windowSeconds)).rejects.toBeInstanceOf(
+    await expect(service.incrWithWindow('login-fail:k', windowSeconds)).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(spy).not.toHaveBeenCalled();
@@ -108,7 +108,7 @@ describe('RedisRpcController atomic patterns', () => {
     await expect(controller.incr({ windowSeconds: 900 })).rejects.toBeInstanceOf(
       BadRequestException,
     );
-    await expect(controller.incr({ key: 'k', windowSeconds: 0 })).rejects.toBeInstanceOf(
+    await expect(controller.incr({ key: 'login-fail:k', windowSeconds: 0 })).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(service.incrWithWindow).not.toHaveBeenCalled();

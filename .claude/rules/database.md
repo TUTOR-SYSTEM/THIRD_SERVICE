@@ -52,7 +52,7 @@ given the above; it doesn't mean this repo runs code against all of it.
 only resolves in a local dev checkout that has the sibling `gateway` repo linked; the Docker build
 (`COPY src ./src` into a builder with no sibling repo) fails with `TS2307: Cannot find module
 '@tutor/gateway/schema'`. Every feature imports tables from the local mirror instead, e.g.
-`import { testScenarios } from '../../database/schema'`. Keep the mirror in sync with gateway by
+`import { notifications } from '../../database/schema'`. Keep the mirror in sync with gateway by
 hand (commit "Sync local schema mirror with gateway develop"), not by importing gateway's file.
 
 `src/database/database.module.ts` imports the local mirror with `import * as schema from
@@ -63,5 +63,6 @@ connect failed"). The module therefore strips the `default` key (`Object.fromEnt
 .filter(([key]) => key !== 'default'))`) and passes `{ schema: tables }` to `drizzle()`. Keep that when touching the provider
 (same fix lives in `user` and `tutor-service`). `request_logs` also gained `ip` and
 `error_message` columns in gateway's schema — apply with `db:push` from gateway.
-`test_scenarios`/`test_runs`/`test_fixtures` still live in the mirror, but nothing in `src/` uses them:
-`src/features/test-scenario/` was removed (commit `fa1bbc1`).
+The `test_scenarios`/`test_runs`/`test_fixtures` tables and their enums were removed from the mirror with the
+test-scenario feature (`/test-scenarios` is gone from gateway, third and tutor). They may still exist in Postgres
+until a drop migration runs in gateway.

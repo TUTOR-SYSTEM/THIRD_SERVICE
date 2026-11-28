@@ -26,8 +26,6 @@
     "db:migrate:dev": "bun --cwd=../tutor run db:migrate:dev",
     "db:studio": "bunx drizzle-kit studio --config=drizzle.config.ts",
     "db:seed:user": "bun scripts/seed-user.ts",
-    "db:seed:test-scenarios": "bun scripts/seed-test-scenarios.ts",
-    "db:seed:test-scenarios-from-logs": "bun scripts/seed-test-scenarios-from-logs.ts",
     "db:seed:users-bulk": "bun scripts/seed-users-bulk.ts",
     "db:seed:categories": "bun scripts/seed-categories.ts",
     "db:seed:grades": "bun scripts/seed-grades.ts",

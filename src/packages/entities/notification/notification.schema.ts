@@ -60,7 +60,7 @@ export const createNotificationSchema = z.object({
 });
 
 export const getNotificationsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).max(100_000).default(1),
+  page: z.coerce.number().int().min(1).max(1_000).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(10),
   // An empty / blank search means "no search" (the UI often sends `search=`), not a 400.
   search: z

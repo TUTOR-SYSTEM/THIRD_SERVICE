@@ -7,6 +7,12 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis, type RedisOptions } from 'ioredis';
+import {
+  isIncrAllowedKey,
+  REDIS_MAX_KEYS_PER_CALL,
+  REDIS_TTL_MAX_SECONDS,
+  REDIS_WINDOW_MAX_SECONDS,
+} from '@packages/helpers/redis-keys.policy';
 
 /** Tùy chọn chung: lazyConnect + offline queue cho phép lệnh đầu chờ kết nối (tránh "Stream isn't writeable"). */
 const connectionOptions = {
@@ -161,6 +167,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (typeof ttlSeconds !== 'number' || !Number.isFinite(ttlSeconds) || ttlSeconds <= 0) {
       throw new BadRequestException('ttlSeconds must be a positive number');
     }
+    if (ttlSeconds > REDIS_TTL_MAX_SECONDS) {
+      throw new BadRequestException('ttlSeconds is larger than the 30-day limit');
+    }
     await this.client.set(key, value, 'EX', Math.ceil(ttlSeconds));
   }
 
@@ -194,6 +203,9 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (keys.length === 0) {
       return 0;
     }
+    if (keys.length > REDIS_MAX_KEYS_PER_CALL) {
+      throw new BadRequestException('too many keys in one call');
+    }
     return await this.client.del(...keys);
   }
 
@@ -217,8 +229,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     if (typeof key !== 'string' || key.length === 0) {
       throw new BadRequestException('key is required');
     }
+    if (!isIncrAllowedKey(key)) {
+      throw new BadRequestException('key family is not allowed for incr');
+    }
     if (!Number.isInteger(windowSeconds) || windowSeconds <= 0) {
       throw new BadRequestException('windowSeconds must be a positive integer');
+    }
+    if (windowSeconds > REDIS_WINDOW_MAX_SECONDS) {
+      throw new BadRequestException('windowSeconds is larger than the 1-day limit');
     }
     const count = await this.client.eval(INCR_WITH_WINDOW_SCRIPT, 1, key, windowSeconds);
     return Number(count);

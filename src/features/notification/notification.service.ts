@@ -7,6 +7,9 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ERROR_MESSAGES } from 'src/data/constants';
+
+/** Caps the fan-out of one notification (a whole class, one row per recipient). */
+const MAX_RECIPIENTS_PER_NOTIFICATION = 500;
 import type {
   CreateNotificationDto,
   GetNotificationsQueryDto,
@@ -123,6 +126,11 @@ export class NotificationService {
     if (dto.studentId) ids.add(dto.studentId);
     if (dto.classId) {
       for (const studentId of await this.repo.studentIdsOfClass(dto.classId)) ids.add(studentId);
+    }
+    if (ids.size > MAX_RECIPIENTS_PER_NOTIFICATION) {
+      throw new BadRequestException(
+        'too many recipients for one notification (max ' + MAX_RECIPIENTS_PER_NOTIFICATION + ')',
+      );
     }
     return [...ids];
   }

@@ -48,6 +48,24 @@ services:
     networks:
       - backend-net
 
+  rabbitmq-acl:
+    image: node:22-alpine
+    restart: 'no'
+    depends_on:
+      rabbitmq: { condition: service_healthy }
+    environment:
+      RABBITMQ_MGMT_URL: http://rabbitmq:15672
+      RABBITMQ_USER: ${RABBITMQ_USER:?set RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD}
+      RABBITMQ_GATEWAY_PASSWORD: ${RABBITMQ_GATEWAY_PASSWORD:?set RABBITMQ_GATEWAY_PASSWORD}
+      RABBITMQ_USER_SERVICE_PASSWORD: ${RABBITMQ_USER_SERVICE_PASSWORD:?set RABBITMQ_USER_SERVICE_PASSWORD}
+      RABBITMQ_TUTOR_PASSWORD: ${RABBITMQ_TUTOR_PASSWORD:?set RABBITMQ_TUTOR_PASSWORD}
+      RABBITMQ_THIRD_PASSWORD: ${RABBITMQ_THIRD_PASSWORD:?set RABBITMQ_THIRD_PASSWORD}
+    volumes:
+      - ./docker/rabbitmq/init-acl.mjs:/init-acl.mjs:ro
+    command: ['node', '/init-acl.mjs']
+    networks: [backend-net]
+
 volumes:
   postgres_data:
   rabbitmq_data:

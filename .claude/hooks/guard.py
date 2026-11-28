@@ -6,7 +6,7 @@ Git (Bash), mỗi lệnh `git ...` được phân loại:
   ask   : lệnh phá huỷ / ghi đè lịch sử / đổi working tree khó hoàn tác — luôn hỏi xác nhận
   allow : lệnh chỉ đọc — tự cho phép (chỉ khi cả câu lệnh toàn là git chỉ đọc, không redirect)
   (khác): để luồng quyền mặc định của Claude Code xử lý
-Env: Bash đụng tới .env* hoặc Edit/Write file env => hỏi.
+Env: không còn chặn/hỏi — Bash và Edit/Write đọc/sửa file .env* tự do (theo yêu cầu người dùng).
 """
 import json, os, re, shlex, sys, tempfile
 
@@ -20,8 +20,6 @@ def out(decision, reason):
         "permissionDecision": decision,
         "permissionDecisionReason": reason}}))
     sys.exit(0)
-
-ENV_FILE = re.compile(r"(^|/)\.env(\.[^/\s]*)?$|(^|/)[^/\s]*\.env$")
 
 GATED = {"add", "commit", "push"}                      # deny trừ khi prompt yêu cầu
 READONLY = {"status", "diff", "log", "show", "blame", "grep", "ls-files", "ls-tree",
@@ -182,14 +180,7 @@ if tool == "Bash":
         for d, why in results:
             if d == want:
                 out(d, why + " (.claude/hooks/guard.py)")
-    if re.search(r"(^|[\s/='\"])\.env(\.\w+)*(\s|$|['\"])|\S+\.env(\s|$|['\"])", cmd):
-        out("ask", "Lệnh này động tới file env — cần bạn xác nhận.")
     if results and only_git and all(d == "allow" for d, _ in results):
         out("allow", "Lệnh git chỉ đọc.")
-
-elif tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
-    path = inp.get("file_path") or inp.get("notebook_path") or ""
-    if ENV_FILE.search(path):
-        out("ask", f"Sửa file env ({os.path.basename(path)}) — cần bạn xác nhận.")
 
 sys.exit(0)

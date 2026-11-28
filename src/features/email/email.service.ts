@@ -5,6 +5,7 @@ import type { Transporter } from 'nodemailer';
 import { SendMailOptions } from '@packages/interfaces';
 import { renderPasswordResetOtpEmail } from './templates/password-reset-otp.template';
 import { renderAccountCreatedEmail } from './templates/account-created.template';
+import { renderAccountExistsEmail } from './templates/account-exists.template';
 
 const escapeHtml = (value: string) => value.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
@@ -45,8 +46,9 @@ export class EmailService {
       host,
       port,
       secure: secure === 'true',
-      // Credentials must never go out in clear text: refuse to continue without STARTTLS.
-      requireTLS: secure !== 'true' && !!(user && pass),
+      // Mail (OTP codes, passwords) must never go out in clear text: refuse to continue without
+      // STARTTLS unless SMTP_REQUIRE_TLS=false (local relays without TLS).
+      requireTLS: secure !== 'true' && process.env.SMTP_REQUIRE_TLS !== 'false',
       auth: user && pass ? { user, pass } : undefined,
       // Bounded so a dead SMTP host cannot hold an RPC caller for minutes.
       connectionTimeout: 10_000,
@@ -110,6 +112,22 @@ export class EmailService {
     return this.sendMail({
       to: params.to,
       subject: 'Tài khoản của bạn đã được tạo',
+      html,
+      text,
+    });
+  }
+
+  /** Tells the owner of an address that a sign-up was attempted with it (F-09). No secret in the mail. */
+  async sendAccountExistsMail(params: { to: string; displayName: string; email: string }) {
+    const { html, text } = renderAccountExistsEmail({
+      displayName: params.displayName,
+      email: params.email,
+      loginUrl: `${this.resetPasswordUrlBase}/login`,
+    });
+
+    return this.sendMail({
+      to: params.to,
+      subject: 'Email của bạn đã có tài khoản',
       html,
       text,
     });

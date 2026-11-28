@@ -174,6 +174,6 @@ Cross-service rules (RPC contract, shared conventions) live one level up in `api
   `redis.*`/`email.*`/`log.*` bodies not stored in `request_logs`; Redis 5s command timeout +
   strict `set` validation; upload size cap + `stream.pipeline` download; rate limiter fails open.
 - `redis.controller.ts` (HTTP) was deleted in the working tree before this — only RPC `redis.*` remains.
-- NOT done: RMQ manual ack/DLQ (TRD-08), payload validation on every RPC handler (TRD-11),
+- NOT done: DLQ broker policy + idempotency (TRD-08; DLX/DLQ topology đã có trong code, `rmq-dead-letter.helper.ts`), payload validation on every RPC handler (TRD-11),
   SMTP retry/timeout (TRD-12), mimetype whitelist (TRD-15), `recreate-db.ts` prod guard (TRD-21).
   Test `redis.controller.spec.ts` is stale (imports the deleted controller).

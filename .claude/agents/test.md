@@ -46,8 +46,6 @@ bun run test:cov          # Coverage (Jest, v8 provider)
 bun run test:e2e          # E2E (Jest config at test/jest-e2e.json)
 bun run test:debug        # Debug with inspect
 bun scripts/test-uploads-e2e.ts  # Live HTTP checks of /upload/* against a running service (needs UPLOAD_BASE_URL, TEST_TOKEN_A; prints a PASS/FAIL report, exit 1 on fail)
-SAVE_RESULTS=1 bun scripts/test-uploads-e2e.ts  # same, and store PASS/FAIL rows in test_scenarios + test_runs (service='third')
-TEST_TOKEN_A=<admin token> bun scripts/test-catalog-e2e.ts  # probes every HTTP route and RPC pattern from the gateway's /api-routes/catalog (unauth, authed, RPC via RabbitMQ, request_logs flow); SAVE_RESULTS=1 stores rows, REPORT_PATH writes the markdown report; skips side-effect routes
 ```
 
 ## Writing Unit Tests
@@ -64,7 +62,7 @@ TEST_TOKEN_A=<admin token> bun scripts/test-catalog-e2e.ts  # probes every HTTP 
 ## Writing E2E Tests
 
 - Create `*.e2e-spec.ts` files in `test/`, Jest + Supertest, full request/response cycle.
-- E2E config: `test/jest-e2e.json`. No e2e spec is currently committed (the old `test-scenario` one was removed).
+- E2E config: `test/jest-e2e.json`. No e2e spec is currently committed.
 
 ## Known bugs
 
